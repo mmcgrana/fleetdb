@@ -88,14 +88,28 @@
     :else
       (raise "where op not recognized")))
 
+(defn- order-keyfn [attr dir]
+  (assert (#{:asc :dsc} dir))
+  (if (= dir :asc)
+    (fn [record-a record-b]
+      (compare (attr record-a) (attr record-b)))
+    (fn [record-a record-b]
+      (compare (attr record-b) (attr record-a)))))
+
+(defn- apply-order [records order]
+  (if-let [[attr dir] order]
+    (sort (order-keyfn attr dir) records)
+    records))
+
 (defn- apply-offset [records offset]
   (if offset (drop offset records) records))
 
 (defn- apply-limit [records limit]
   (if limit (take limit records) records))
 
-(defn- find-records [records {:keys [where offset limit]}]
+(defn- find-records [records {:keys [where order offset limit]}]
   (-> (filter (where-pred where) records)
+    (apply-order order)
     (apply-offset offset)
     (apply-limit limit)))
 
@@ -120,7 +134,7 @@
           (reduce
             (fn [[int-rmap int-imap] old-record]
               (let [new-record (merge-compact old-record with)
-                    aug-rmap   (assoc (:id old-record) new-record)
+                    aug-rmap   (assoc int-rmap (:id old-record) new-record)
                     aug-imap   (-> int-imap
                                  (indexes-delete old-record)
                                  (indexes-insert new-record))]
