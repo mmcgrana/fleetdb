@@ -5,23 +5,41 @@
   {:rmap (sorted-map)
    :imap (sorted-map)})
 
-(defn- index-assoc [index on record]
-  (if-let [val (on record)]
-    (assoc index val (:id record))))
+(defn- index-insert [index on record]
+  (let [val (on record)]
+    (if (not (nil? val))
+      (assoc index val (:id record)))))
+
+(defn- indexes-insert [imap record]
+  (reduce
+    (fn [int-imap [on index]]
+      (if-let [new-index (index-insert index on record)]
+        (assoc int-imap on new-index)
+        int-imap))
+    imap imap))
+
+(defn- index-delete [index on record]
+  (let [val (on record)]
+    (if (not (nil? val))
+      (dissoc index val))))
+
+(defn- indexes-delete [imap record]
+  (reduce
+    (fn [int-imap [on index]]
+      (if-let [new-index (index-delete index on record)]
+        (assoc int-imap on new-index)
+        int-imap))
+    imap imap))
 
 (defn- q-insert [db {:keys [record]}]
   (assert record)
   (let [id   (:id record)
-        rmap (:rmap db)
-        imap (:imap db)]
+        {old-rmap :rmap old-imap :imap} db]
     (assert id)
-    (assert (not (contains? rmap id)))
-    (let [rmap-new (assoc rmap id record)
-          imap-new (reduce
-                     (fn [imap-int [on index]]
-                       (assoc imap-int on (index-assoc index on record)))
-                     imap imap)]
-      (assoc db :rmap rmap-new :imap imap-new))))
+    (assert (not (contains? old-rmap id)))
+    (let [new-rmap (assoc old-rmap id record)
+          new-imap (indexes-insert old-imap record)]
+      (assoc db :rmap new-rmap :imap new-imap))))
 
 (def- conj-op?
   #{:and :or})
@@ -95,27 +113,35 @@
 
 (defn- q-update [db {:keys [with] :as opts}]
   (assert with)
-  (let [old-rmap   (:rmap db)
-        up-records (find-records (vals old-rmap) opts)
-        new-rmap
+  (let [{old-rmap :rmap old-imap :imap} db
+        old-records     (find-records (vals old-rmap) opts)
+        num-old-records (count old-records)
+        [new-rmap new-imap]
           (reduce
-            (fn [int-rmap up-record]
-              (assoc int-rmap (:id up-record)
-                (merge-compact up-record with)))
-            old-rmap
-            up-records)]
-    (assoc db :rmap new-rmap)))
+            (fn [[int-rmap int-imap] old-record]
+              (let [new-record (merge-compact old-record with)
+                    aug-rmap   (assoc (:id old-record) new-record)
+                    aug-imap   (-> int-imap
+                                 (indexes-delete old-record)
+                                 (indexes-insert new-record))]
+                [aug-rmap aug-imap]))
+            [old-rmap old-imap]
+            old-records)]
+    [(assoc db :rmap new-rmap :imap new-imap) num-old-records]))
 
 (defn- q-delete [db opts]
-  (let [old-rmap    (:rmap db)
-        del-records (find-records (vals old-rmap) opts)
-        new-rmap
+  (let [{old-rmap :rmap old-imap :imap} db
+        old-records (find-records (vals old-rmap) opts)
+        num-old-records (count old-records)
+        [new-rmap new-imap]
           (reduce
-            (fn [int-rmap del-record]
-              (dissoc int-rmap (:id del-record)))
-            old-rmap
-            del-records)]
-    (assoc db :rmap new-rmap)))
+            (fn [[int-rmap int-imap] old-record]
+              (let [aug-rmap (dissoc int-rmap (:id old-record))
+                    aug-imap (indexes-delete int-imap old-record)]
+                [aug-rmap aug-imap]))
+            [old-rmap old-imap]
+            old-records)]
+    [(assoc db :rmap new-rmap :imap new-imap) num-old-records]))
 
 (defn- q-index [db {:keys [on where]}]
   (assoc-in db [:imap on]
