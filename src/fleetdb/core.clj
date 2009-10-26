@@ -2,13 +2,26 @@
   (use (fleetdb util)))
 
 (defn init []
-  {:records-map (sorted-map)})
+  {:rmap (sorted-map)
+   :imap (sorted-map)})
+
+(defn- index-assoc [index on record]
+  (if-let [val (on record)]
+    (assoc index val (:id record))))
 
 (defn- q-insert [db {:keys [record]}]
   (assert record)
-  (let [id (:id record)]
+  (let [id   (:id record)
+        rmap (:rmap db)
+        imap (:imap db)]
     (assert id)
-    (assoc-in db [:records-map id] record)))
+    (assert (not (contains? rmap id)))
+    (let [rmap-new (assoc rmap id record)
+          imap-new (reduce
+                     (fn [imap-int [on index]]
+                       (assoc imap-int on (index-assoc index on record)))
+                     imap imap)]
+      (assoc db :rmap rmap-new :imap imap-new))))
 
 (def- conj-op?
   #{:and :or})
@@ -74,42 +87,53 @@
     records)
 
 (defn- q-select [db {:keys [only] :as opts}]
-  (-> (find-records (vals (:records-map db)) opts)
+  (-> (find-records (vals (:rmap db)) opts)
     (apply-only only)))
 
 (defn- q-count [db opts]
-  (count (find-records (vals (:records-map db)) opts)))
+  (count (find-records (vals (:rmap db)) opts)))
 
 (defn- q-update [db {:keys [with] :as opts}]
   (assert with)
-  (let [old-records-map (:records-map db)
-        up-records      (find-records (vals old-records-map) opts)
-        new-records-map
+  (let [old-rmap   (:rmap db)
+        up-records (find-records (vals old-rmap) opts)
+        new-rmap
           (reduce
-            (fn [int-records-map up-record]
-              (assoc int-records-map (:id up-record)
+            (fn [int-rmap up-record]
+              (assoc int-rmap (:id up-record)
                 (merge-compact up-record with)))
-            old-records-map
+            old-rmap
             up-records)]
-    (assoc db :records-map new-records-map)))
+    (assoc db :rmap new-rmap)))
 
 (defn- q-delete [db opts]
-  (let [old-records-map (:records-map db)
-        del-records     (find-records (vals old-records-map) opts)
-        new-records-map
+  (let [old-rmap    (:rmap db)
+        del-records (find-records (vals old-rmap) opts)
+        new-rmap
           (reduce
-            (fn [int-records-map del-record]
-              (dissoc int-records-map (:id del-record)))
-            old-records-map
+            (fn [int-rmap del-record]
+              (dissoc int-rmap (:id del-record)))
+            old-rmap
             del-records)]
-    (assoc db :records-map new-records-map)))
+    (assoc db :rmap new-rmap)))
+
+(defn- q-index [db {:keys [on where]}]
+  (assoc-in db [:imap on]
+    (reduce
+      (fn [int-index record]
+        (if-let [val (on record)]
+          (assoc int-index val (:id record))
+          int-index))
+      (sorted-map)
+      (vals (:rmap db)))))
 
 (def- query-fns
   {:select q-select
    :count  q-count
    :insert q-insert
    :update q-update
-   :delete q-delete})
+   :delete q-delete
+   :index  q-index})
 
 (defn exec [db [query-type opts]]
   (if-let [queryfn (query-fns query-type)]
