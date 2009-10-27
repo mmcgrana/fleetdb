@@ -32,3 +32,12 @@
   `(let [~sym ~exp]
      (if (~test ~sym)
        ~@body)))
+
+(defn greatest
+  ([coll]
+     (greatest compare coll))
+  ([compfn coll]
+     (first (sort #(compfn %2 %1) coll))))
+
+(defn least-by [keyfn coll]
+  (first (sort-by keyfn coll)))

@@ -97,61 +97,102 @@
     (fn [record-a record-b]
       (compare (attr record-b) (attr record-a)))))
 
-(defn- apply-only [records only]
-  (if only
-    (map #(select-keys % only) records))
-    records)
+(defn- where-plans [db where order]
+  [{:action  :db-scan
+    :options nil
+    :source  nil
+    :order   [:id :asc]
+    :size    :db
+    :cost    [:scan :db]}])
 
-(defn filter-plan [source where]
+(defn- filter-plan [source where]
   (if-not where
     source
     {:action  :filter
      :options {:where where}
-     :source  source}))
+     :source  source
+     :order   (:order source)
+     :size    (:size source)
+     :cost    [:scan (:size source)]}))
 
-(defn order-plan [source order]
-  (if-not order
+(defn- order-plan [source order]
+  (if (or (not order) (= order (:order source)))
     source
     {:action  :sort
      :options {:order order}
-     :source  source}))
+     :source  source
+     :order   order
+     :size    (:size source)
+     :cost    [:sort (:size source)]}))
 
-(defn record-stream-plan [db where order]
-  (-> {:action :full-scan}
-    (filter-plan where)
-    (order-plan order)))
-
-(defn offset-plan [source offset]
+(defn- offset-plan [source offset]
   (if-not offset
     source
     {:action  :offset
      :options {:offset offset}
-     :source  source}))
+     :source  source
+     :order   (:order source)
+     :size    (:size source)
+     :cost    [:scan :range]}))
 
-(defn limit-plan [source limit]
+(defn- limit-plan [source limit]
   (if-not limit
     source
     {:action  :limit
      :options {:limit limit}
-     :source  source}))
+     :source  source
+     :order   (:order source)
+     :size    (:size source)
+     :cost    [:scan :range]}))
 
-(defn only-plan [source only]
+(defn- only-plan [source only]
   (if-not only
     source
     {:action  :only
      :options {:only only}
-     :source  source}))
+     :source  source
+     :order   (:order source)
+     :size    (:size source)
+     :cost    [:scan (:size source)]}))
 
-(defn select-plan [db where order offset limit only]
-  (-> (record-stream-plan db where order)
+(defn symbolic-costs [{:keys [source] :as plan}]
+  (cons (:cost plan)
+    (cond
+      (nil? source) nil
+      (map? source) (symbolic-costs source)
+      :else         (apply concat (map symbolic-costs source)))))
+
+(def- numeric-costs
+  {[:sort :db]     9
+   [:set  :db]     8
+   [:scan :db]     7
+   [:sort :range]  6
+   [:set  :range]  5
+   [:scan :range]  4
+   [:sort :bucket] 3
+   [:set  :bucket] 2
+   [:scan :bucket] 1})
+
+(defn- quantify-cost [plan]
+  (let [s-costs (symbolic-costs plan)
+        n-costs (map numeric-costs s-costs)]
+    (greatest n-costs)))
+
+(defn- wo-plan [db where order]
+  (let [w-plans (where-plans db where order)
+        o-plans (map #(order-plan % order) w-plans)]
+    (least-by quantify-cost o-plans)))
+
+(defn- select-plan [db where order offset limit only]
+  (-> (wo-plan db where order)
     (offset-plan offset)
     (limit-plan limit)
     (only-plan only)))
 
-(defn execute-plan [db plan]
+(defn- execute-plan [db plan]
   (let [{:keys [action options source]} plan]
     (condp = action
-      :full-scan
+      :db-scan
         (vals (:rmap db))
 
       :filter
@@ -159,7 +200,7 @@
           (filter (where-pred where) (execute-plan db source)))
 
       :sort
-        (let [{:keys [attr dir]} options]
+        (let [{[attr dir] :order} options]
           (sort (order-keyfn attr dir) (execute-plan db source)))
 
       :offset
