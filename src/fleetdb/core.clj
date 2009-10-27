@@ -32,6 +32,7 @@
     imap imap))
 
 (defn- q-insert [db {:keys [records]}]
+  (assert records)
   (let [{old-rmap :rmap old-imap :imap} db
         [new-rmap new-imap]
           (reduce
@@ -182,12 +183,12 @@
 
 (declare exec)
 
-(defn- q-multi-read [db queries]
+(defn- q-multi-read [db {:keys [queries]}]
   (vec
     (map (fn [query] (exec db query))
          queries)))
 
-(defn- q-multi-write [db queries]
+(defn- q-multi-write [db {:keys [queries]}]
   (reduce
     (fn [[int-db int-results] query]
       (let [[aug-db result] (exec int-db query)]
@@ -195,19 +196,24 @@
     [db []]
     queries))
 
+(defn- q-checked-write [db {:keys [check expect write]}]
+  (if (= (exec db check) expect)
+    (exec db write)))
+
 (def- query-fns
-  {:select       q-select
-   :count        q-count
-   :insert       q-insert
-   :update       q-update
-   :delete       q-delete
-   :create-index q-create-index
-   :drop-index   q-drop-index
-   :list-indexes q-list-indexes
-   :multi-read   q-multi-read
-   :multi-write  q-multi-write})
+  {:select        q-select
+   :count         q-count
+   :insert        q-insert
+   :update        q-update
+   :delete        q-delete
+   :create-index  q-create-index
+   :drop-index    q-drop-index
+   :list-indexes  q-list-indexes
+   :multi-read    q-multi-read
+   :multi-write   q-multi-write
+   :checked-write q-checked-write})
 
 (defn exec [db [query-type opts]]
   (if-let [queryfn (query-fns query-type)]
     (queryfn db opts)
-    (raise "query type not recognized")))
+    (raise (str "query type " query-type " not recognized"))))
