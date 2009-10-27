@@ -162,14 +162,18 @@
     [(assoc db :rmap new-rmap :imap new-imap) num-old-records]))
 
 (defn- q-index [db {:keys [on where]}]
-  (assoc-in db [:imap on]
-    (reduce
-      (fn [int-index record]
-        (if-let [val (on record)]
-          (assoc int-index val (:id record))
-          int-index))
-      (sorted-map)
-      (vals (:rmap db)))))
+  (let [records (vals (:rmap db))
+        index
+          (reduce
+            (fn [int-index record]
+              (if-let [val (on record)]
+                (assoc int-index val (:id record))
+                int-index))
+            (sorted-map)
+            records)]
+    (prn (count records))
+    [nil (count index)]))
+;    [(assoc-in db [:imap on] index) (count index)]))
 
 (declare exec)
 
