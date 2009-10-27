@@ -187,6 +187,14 @@
     (map (fn [query] (exec db query))
          queries)))
 
+(defn- q-multi-write [db queries]
+  (reduce
+    (fn [[int-db int-results] query]
+      (let [[aug-db result] (exec int-db query)]
+        [aug-db (conj int-results result)]))
+    [db []]
+    queries))
+
 (def- query-fns
   {:select       q-select
    :count        q-count
@@ -196,7 +204,8 @@
    :create-index q-create-index
    :drop-index   q-drop-index
    :list-indexes q-list-indexes
-   :multi-read   q-multi-read})
+   :multi-read   q-multi-read
+   :multi-write  q-multi-write})
 
 (defn exec [db [query-type opts]]
   (if-let [queryfn (query-fns query-type)]
