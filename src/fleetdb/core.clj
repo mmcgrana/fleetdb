@@ -31,15 +31,19 @@
         int-imap))
     imap imap))
 
-(defn- q-insert [db {:keys [record]}]
-  (assert record)
-  (let [id   (:id record)
-        {old-rmap :rmap old-imap :imap} db]
-    (assert id)
-    (assert (not (contains? old-rmap id)))
-    (let [new-rmap (assoc old-rmap id record)
-          new-imap (indexes-insert old-imap record)]
-      (assoc db :rmap new-rmap :imap new-imap))))
+(defn- q-insert [db {:keys [records]}]
+  (let [{old-rmap :rmap old-imap :imap} db
+        [new-rmap new-imap]
+          (reduce
+            (fn [[int-rmap int-imap] record]
+              (let [id (:id record)]
+                (assert id)
+                (assert (not (contains? int-rmap id)))
+                [(assoc int-rmap id record)
+                 (indexes-insert int-imap record)]))
+            [old-rmap old-imap]
+            records)]
+    [(assoc db :rmap new-rmap :imap new-imap) (count records)]))
 
 (def- conj-op?
   #{:and :or})
@@ -86,7 +90,7 @@
     (nil? op)
       (constantly true)
     :else
-      (raise "where op not recognized")))
+      (raise (str "where op " op " not recognized"))))
 
 (defn- order-keyfn [attr dir]
   (assert (#{:asc :dsc} dir))
@@ -167,13 +171,21 @@
       (sorted-map)
       (vals (:rmap db)))))
 
+(declare exec)
+
+(defn- q-mread [db queries]
+  (vec
+    (map (fn [query] (exec db query))
+         queries)))
+
 (def- query-fns
   {:select q-select
    :count  q-count
    :insert q-insert
    :update q-update
    :delete q-delete
-   :index  q-index})
+   :index  q-index
+   :mread  q-mread})
 
 (defn exec [db [query-type opts]]
   (if-let [queryfn (query-fns query-type)]
