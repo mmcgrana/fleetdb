@@ -5,44 +5,41 @@
   {:rmap (sorted-map)
    :imap (sorted-map)})
 
-(defn- indexes-apply [imap apply-fn]
+(defn- rmap-insert [rmap record]
+  (let [id (:id record)]
+    (assert id)
+    (assert (not (contains? rmap id)))
+    (assoc rmap (:id record) record)))
+
+(defn- rmap-update [rmap old-record new-record]
+  (assoc rmap (:id old-record) new-record))
+
+(defn- rmap-delete [rmap old-record]
+  (dissoc rmap (:id old-record)))
+
+(defn- imap-apply [imap apply-fn]
   (reduce
     (fn [int-imap [on index]]
       (assoc int-imap (apply-fn on index)))
     {}
     imap))
 
-(defn- indexes-insert [imap record]
-  (indexes-apply imap
+(defn- imap-insert [imap record]
+  (imap-apply imap
     (fn [on index]
-      (assoc index (on record) (:id record)))))
+      (assoc index (on record) record))))
 
-(defn- indexes-update [imap old-record new-record]
-  (indexes-apply imap
+(defn- imap-update [imap old-record new-record]
+  (imap-apply imap
     (fn [on index]
       (-> index
         (dissoc (on old-record))
-        (assoc  (on new-record) (:id new-record))))))
+        (assoc  (on new-record) new-record)))))
 
-(defn- indexes-delete [imap record]
-  (indexes-apply imap
+(defn- imap-delete [imap record]
+  (imap-apply imap
     (fn [on index]
       (dissoc index (on record)))))
-
-(defn- q-insert [db {:keys [records]}]
-  (assert records)
-  (let [{old-rmap :rmap old-imap :imap} db
-        [new-rmap new-imap]
-          (reduce
-            (fn [[int-rmap int-imap] record]
-              (let [id (:id record)]
-                (assert id)
-                (assert (not (contains? int-rmap id)))
-                [(assoc int-rmap id record)
-                 (indexes-insert int-imap record)]))
-            [old-rmap old-imap]
-            records)]
-    [(assoc db :rmap new-rmap :imap new-imap) (count records)]))
 
 (def- conj-op?
   #{:and :or})
@@ -222,35 +219,31 @@
 (defn- q-count [db opts]
   (count (q-select db opts)))
 
+(defn- db-apply [db records apply-fn]
+  (let [{old-rmap :rmap old-imap :imap} db
+        [new-rmap new-imap] (reduce apply-fn [old-rmap old-imap] records)]
+    [(assoc db :rmap new-rmap :imap new-imap) (count records)]))
+
+(defn- q-insert [db {:keys [records]}]
+  (assert records)
+  (db-apply db records
+    (fn [[int-rmap int-imap] record]
+      [(rmap-insert int-rmap record)
+       (imap-insert int-imap record)])))
+
 (defn- q-update [db {:keys [with] :as opts}]
   (assert with)
-  (let [{old-rmap :rmap old-imap :imap} db
-        old-records     (q-select db opts)
-        num-old-records (count old-records)
-        [new-rmap new-imap]
-          (reduce
-            (fn [[int-rmap int-imap] old-record]
-              (let [new-record (merge-compact old-record with)
-                    aug-rmap   (assoc int-rmap (:id old-record) new-record)
-                    aug-imap   (indexes-update int-imap old-record new-record)]
-                [aug-rmap aug-imap]))
-            [old-rmap old-imap]
-            old-records)]
-    [(assoc db :rmap new-rmap :imap new-imap) num-old-records]))
+    (db-apply db (q-select db opts)
+      (fn [[int-rmap int-imap] old-record]
+        (let [new-record (merge-compact old-record with)]
+          [(rmap-update int-rmap old-record new-record)
+           (imap-update int-imap old-record new-record)]))))
 
 (defn- q-delete [db opts]
-  (let [{old-rmap :rmap old-imap :imap} db
-        old-records (q-select db opts)
-        num-old-records (count old-records)
-        [new-rmap new-imap]
-          (reduce
-            (fn [[int-rmap int-imap] old-record]
-              (let [aug-rmap (dissoc int-rmap (:id old-record))
-                    aug-imap (indexes-delete int-imap old-record)]
-                [aug-rmap aug-imap]))
-            [old-rmap old-imap]
-            old-records)]
-    [(assoc db :rmap new-rmap :imap new-imap) num-old-records]))
+  (db-apply db (q-select db opts)
+    (fn [[int-rmap int-imap] old-record]
+      [(rmap-delete int-rmap old-record)
+       (imap-delete int-imap old-record)])))
 
 (defn- q-explain [db {[query-type opts] :query :as explain-opts}]
   (assert (= query-type :select))
