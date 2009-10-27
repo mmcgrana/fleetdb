@@ -171,9 +171,11 @@
                 int-index))
             (sorted-map)
             records)]
-    (prn (count records))
-    [nil (count index)]))
-;    [(assoc-in db [:imap on] index) (count index)]))
+    [(assoc-in db [:imap on] index) (count index)]))
+
+(defn- q-drop-index [db {:keys [on]}]
+  (let [index (get-in db [:imap on])]
+    [(update-in db [:imap] dissoc on) (count index)]))
 
 (declare exec)
 
@@ -189,6 +191,7 @@
    :update        q-update
    :delete        q-delete
    :create-index  q-create-index
+   :drop-index    q-drop-index
    :mread         q-mread})
 
 (defn exec [db [query-type opts]]
