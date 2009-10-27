@@ -6,30 +6,26 @@
    :imap (sorted-map)})
 
 (defn- index-insert [index on record]
-  (let [val (on record)]
-    (if (not (nil? val))
-      (assoc index val (:id record)))))
-
-(defn- indexes-insert [imap record]
-  (reduce
-    (fn [int-imap [on index]]
-      (if-let [new-index (index-insert index on record)]
-        (assoc int-imap on new-index)
-        int-imap))
-    imap imap))
+  (if-let? [non-nil? val (on record)]
+    (assoc index val (:id record))))
 
 (defn- index-delete [index on record]
-  (let [val (on record)]
-    (if (not (nil? val))
-      (dissoc index val))))
+  (if-let? [non-nil? val (on record)]
+    (dissoc index val)))
 
-(defn- indexes-delete [imap record]
+(defn- indexes-update [imap record update-fn]
   (reduce
     (fn [int-imap [on index]]
-      (if-let [new-index (index-delete index on record)]
+      (if-let [new-index (update-fn index on record)]
         (assoc int-imap on new-index)
         int-imap))
     imap imap))
+
+(defn- indexes-insert [imap record]
+  (indexes-update imap record index-insert))
+
+(defn- indexes-delete [imap record]
+  (indexes-update imap record index-delete))
 
 (defn- q-insert [db {:keys [records]}]
   (assert records)
