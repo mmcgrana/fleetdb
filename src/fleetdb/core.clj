@@ -161,7 +161,7 @@
             old-records)]
     [(assoc db :rmap new-rmap :imap new-imap) num-old-records]))
 
-(defn- q-index [db {:keys [on where]}]
+(defn- q-create-index [db {:keys [on where]}]
   (let [records (vals (:rmap db))
         index
           (reduce
@@ -183,13 +183,13 @@
          queries)))
 
 (def- query-fns
-  {:select q-select
-   :count  q-count
-   :insert q-insert
-   :update q-update
-   :delete q-delete
-   :index  q-index
-   :mread  q-mread})
+  {:select        q-select
+   :count         q-count
+   :insert        q-insert
+   :update        q-update
+   :delete        q-delete
+   :create-index  q-create-index
+   :mread         q-mread})
 
 (defn exec [db [query-type opts]]
   (if-let [queryfn (query-fns query-type)]
