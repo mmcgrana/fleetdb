@@ -182,7 +182,7 @@
 
 (declare exec)
 
-(defn- q-mread [db queries]
+(defn- q-multi-read [db queries]
   (vec
     (map (fn [query] (exec db query))
          queries)))
@@ -196,7 +196,7 @@
    :create-index q-create-index
    :drop-index   q-drop-index
    :list-indexes q-list-indexes
-   :mread        q-mread})
+   :multi-read   q-multi-read})
 
 (defn exec [db [query-type opts]]
   (if-let [queryfn (query-fns query-type)]
