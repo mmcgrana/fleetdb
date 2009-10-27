@@ -178,4 +178,4 @@
 (defn exec [db [query-type opts]]
   (if-let [queryfn (query-fns query-type)]
     (queryfn db opts)
-    (raise "command not recognized")))
+    (raise "query type not recognized")))
