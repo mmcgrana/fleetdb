@@ -1,6 +1,3 @@
-FleetDB
--------
-
 FleetDB aims to be a fast, concurrent, flexible, and powerful main memory database. It will feature:
 
 * A document-oriented data model
