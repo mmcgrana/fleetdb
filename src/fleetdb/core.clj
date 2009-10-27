@@ -99,8 +99,6 @@
 
 (defn- where-plans [db where order]
   [{:action  :db-scan
-    :options nil
-    :source  nil
     :order   [:id :asc]
     :size    :db
     :cost    [:scan :db]}])
@@ -110,50 +108,50 @@
     source
     {:action  :filter
      :options {:where where}
-     :source  source
      :order   (:order source)
      :size    (:size source)
-     :cost    [:scan (:size source)]}))
+     :cost    [:scan (:size source)]
+     :source  source}))
 
 (defn- order-plan [source order]
   (if (or (not order) (= order (:order source)))
     source
     {:action  :sort
      :options {:order order}
-     :source  source
      :order   order
      :size    (:size source)
-     :cost    [:sort (:size source)]}))
+     :cost    [:sort (:size source)]
+     :source  source}))
 
 (defn- offset-plan [source offset]
   (if-not offset
     source
     {:action  :offset
      :options {:offset offset}
-     :source  source
      :order   (:order source)
      :size    (:size source)
-     :cost    [:scan :range]}))
+     :cost    [:scan :range]
+     :source  source}))
 
 (defn- limit-plan [source limit]
   (if-not limit
     source
     {:action  :limit
      :options {:limit limit}
-     :source  source
      :order   (:order source)
      :size    (:size source)
-     :cost    [:scan :range]}))
+     :cost    [:scan :range]
+     :source  source}))
 
 (defn- only-plan [source only]
   (if-not only
     source
     {:action  :only
      :options {:only only}
-     :source  source
      :order   (:order source)
      :size    (:size source)
-     :cost    [:scan (:size source)]}))
+     :cost    [:scan (:size source)]
+     :source  source}))
 
 (defn symbolic-costs [{:keys [source] :as plan}]
   (cons (:cost plan)
@@ -254,6 +252,11 @@
             old-records)]
     [(assoc db :rmap new-rmap :imap new-imap) num-old-records]))
 
+(defn- q-explain [db {[query-type opts] :query :as explain-opts}]
+  (assert (= query-type :select))
+  (let [{:keys [where order offset limit only]} opts]
+    (select-plan db where order offset limit only)))
+
 (defn- q-create-index [db {:keys [on where]}]
   (let [records (vals (:rmap db))
         index
@@ -298,6 +301,7 @@
    :insert        q-insert
    :update        q-update
    :delete        q-delete
+   :explain       q-explain
    :create-index  q-create-index
    :drop-index    q-drop-index
    :list-indexes  q-list-indexes
