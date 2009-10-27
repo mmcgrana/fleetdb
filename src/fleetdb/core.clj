@@ -177,6 +177,9 @@
   (let [index (get-in db [:imap on])]
     [(update-in db [:imap] dissoc on) (count index)]))
 
+(defn- q-list-indexes [db opts]
+  (vec (keys (:imap db))))
+
 (declare exec)
 
 (defn- q-mread [db queries]
@@ -185,14 +188,15 @@
          queries)))
 
 (def- query-fns
-  {:select        q-select
-   :count         q-count
-   :insert        q-insert
-   :update        q-update
-   :delete        q-delete
-   :create-index  q-create-index
-   :drop-index    q-drop-index
-   :mread         q-mread})
+  {:select       q-select
+   :count        q-count
+   :insert       q-insert
+   :update       q-update
+   :delete       q-delete
+   :create-index q-create-index
+   :drop-index   q-drop-index
+   :list-indexes q-list-indexes
+   :mread        q-mread})
 
 (defn exec [db [query-type opts]]
   (if-let [queryfn (query-fns query-type)]
