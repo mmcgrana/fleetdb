@@ -5,27 +5,29 @@
   {:rmap (sorted-map)
    :imap (sorted-map)})
 
-(defn- index-insert [index on record]
-  (if-let? [non-nil? val (on record)]
-    (assoc index val (:id record))))
-
-(defn- index-delete [index on record]
-  (if-let? [non-nil? val (on record)]
-    (dissoc index val)))
-
-(defn- indexes-update [imap record update-fn]
+(defn- indexes-apply [imap apply-fn]
   (reduce
     (fn [int-imap [on index]]
-      (if-let [new-index (update-fn index on record)]
-        (assoc int-imap on new-index)
-        int-imap))
-    imap imap))
+      (assoc int-imap (apply-fn on index)))
+    {}
+    imap))
 
 (defn- indexes-insert [imap record]
-  (indexes-update imap record index-insert))
+  (indexes-apply imap
+    (fn [on index]
+      (assoc index (on record) (:id record)))))
+
+(defn- indexes-update [imap old-record new-record]
+  (indexes-apply imap
+    (fn [on index]
+      (-> index
+        (dissoc (on old-record))
+        (assoc  (on new-record) (:id new-record))))))
 
 (defn- indexes-delete [imap record]
-  (indexes-update imap record index-delete))
+  (indexes-apply imap
+    (fn [on index]
+      (dissoc index (on record)))))
 
 (defn- q-insert [db {:keys [records]}]
   (assert records)
@@ -230,9 +232,7 @@
             (fn [[int-rmap int-imap] old-record]
               (let [new-record (merge-compact old-record with)
                     aug-rmap   (assoc int-rmap (:id old-record) new-record)
-                    aug-imap   (-> int-imap
-                                 (indexes-delete old-record)
-                                 (indexes-insert new-record))]
+                    aug-imap   (indexes-update int-imap old-record new-record)]
                 [aug-rmap aug-imap]))
             [old-rmap old-imap]
             old-records)]
