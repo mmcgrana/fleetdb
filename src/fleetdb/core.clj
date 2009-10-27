@@ -101,39 +101,94 @@
     (fn [record-a record-b]
       (compare (attr record-b) (attr record-a)))))
 
-(defn- apply-order [records order]
-  (if-let [[attr dir] order]
-    (sort (order-keyfn attr dir) records)
-    records))
-
-(defn- apply-offset [records offset]
-  (if offset (drop offset records) records))
-
-(defn- apply-limit [records limit]
-  (if limit (take limit records) records))
-
-(defn- find-records [records {:keys [where order offset limit]}]
-  (-> (filter (where-pred where) records)
-    (apply-order order)
-    (apply-offset offset)
-    (apply-limit limit)))
-
 (defn- apply-only [records only]
   (if only
     (map #(select-keys % only) records))
     records)
 
-(defn- q-select [db {:keys [only] :as opts}]
-  (-> (find-records (vals (:rmap db)) opts)
-    (apply-only only)))
+(defn filter-plan [source where]
+  (if-not where
+    source
+    {:action  :filter
+     :options {:where where}
+     :source  source}))
+
+(defn order-plan [source order]
+  (if-not order
+    source
+    {:action  :sort
+     :options {:order order}
+     :source  source}))
+
+(defn record-stream-plan [db where order]
+  (-> {:action :full-scan}
+    (filter-plan where)
+    (order-plan order)))
+
+(defn offset-plan [source offset]
+  (if-not offset
+    source
+    {:action  :offset
+     :options {:offset offset}
+     :source  source}))
+
+(defn limit-plan [source limit]
+  (if-not limit
+    source
+    {:action  :limit
+     :options {:limit limit}
+     :source  source}))
+
+(defn only-plan [source only]
+  (if-not only
+    source
+    {:action  :only
+     :options {:only only}
+     :source  source}))
+
+(defn select-plan [db where order offset limit only]
+  (-> (record-stream-plan db where order)
+    (offset-plan offset)
+    (limit-plan limit)
+    (only-plan only)))
+
+(defn execute-plan [db plan]
+  (let [{:keys [action options source]} plan]
+    (condp = action
+      :full-scan
+        (vals (:rmap db))
+
+      :filter
+        (let [{:keys [where]} options]
+          (filter (where-pred where) (execute-plan db source)))
+
+      :sort
+        (let [{:keys [attr dir]} options]
+          (sort (order-keyfn attr dir) (execute-plan db source)))
+
+      :offset
+        (let [{:keys [offset]} options]
+          (drop offset (execute-plan db source)))
+
+      :limit
+        (let [{:keys [limit]} options]
+          (take limit (execute-plan db source)))
+
+      :only
+        (let [{:keys [only]} options]
+          (map #(select-keys % only) (execute-plan db source))))))
+
+(defn- q-select [db {:keys [where order offset limit only]}]
+  (execute-plan db
+    (select-plan db where order offset limit only)))
 
 (defn- q-count [db opts]
-  (count (find-records (vals (:rmap db)) opts)))
+  (count (q-select db opts)))
 
 (defn- q-update [db {:keys [with] :as opts}]
   (assert with)
   (let [{old-rmap :rmap old-imap :imap} db
-        old-records     (find-records (vals old-rmap) opts)
+        old-records     (q-select db opts)
         num-old-records (count old-records)
         [new-rmap new-imap]
           (reduce
@@ -150,7 +205,7 @@
 
 (defn- q-delete [db opts]
   (let [{old-rmap :rmap old-imap :imap} db
-        old-records (find-records (vals old-rmap) opts)
+        old-records (q-select db opts)
         num-old-records (count old-records)
         [new-rmap new-imap]
           (reduce
