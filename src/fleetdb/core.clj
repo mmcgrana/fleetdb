@@ -111,8 +111,6 @@
             val-set        (set val-vec)]
         (fn [record]
           (contains? val-set (attr record))))
-    (nil? op)
-      (constantly true)
     :else
       (raise (str "where op " op " not recognized"))))
 
