@@ -15,8 +15,6 @@
 
 (def != (complement =))
 
-(def non-nil? (comp not nil?))
-
 (defn raise [msg]
   (throw (Exception. msg)))
 
@@ -28,10 +26,8 @@
       (if (nil? v) (dissoc m-int k) (assoc m-int k v)))
     m1 m2))
 
-(defmacro if-let? [[test sym exp] & body]
-  `(let [~sym ~exp]
-     (if (~test ~sym)
-       ~@body)))
+(defn update [m k f & args]
+  (assoc m k (apply f (get m k) args)))
 
 (defn greatest
   ([coll]

@@ -17,6 +17,29 @@
 (defn- rmap-delete [rmap old-record]
   (dissoc rmap (:id old-record)))
 
+(defn- index-insert [index on record]
+  (let [val     (on record)
+        indexed (get index val)]
+    (update index val
+      (fn [indexed]
+        (cond
+          (nil? indexed) record
+          (set? indexed) (conj indexed record)
+          :single-id     (hash-set indexed record))))))
+
+(defn- index-delete [index on record]
+  (let [val     (on record)
+        indexed (val index)]
+    (update index val
+      (fn [indexed]
+        (if (and (set? indexed) (> 1 (count indexed)))
+          (do
+            (assert (contains? indexed record))
+            (disj indexed record))
+          (do
+            (assert (= #{record} indexed))
+            nil))))))
+
 (defn- imap-apply [imap apply-fn]
   (reduce
     (fn [int-imap [on index]]
@@ -27,19 +50,24 @@
 (defn- imap-insert [imap record]
   (imap-apply imap
     (fn [on index]
-      (assoc index (on record) record))))
+      (index-insert index on record))))
 
 (defn- imap-update [imap old-record new-record]
   (imap-apply imap
     (fn [on index]
       (-> index
-        (dissoc (on old-record))
-        (assoc  (on new-record) new-record)))))
+        (index-delete on old-record)
+        (index-insert  on new-record)))))
 
 (defn- imap-delete [imap record]
   (imap-apply imap
-    (fn [on index]
-      (dissoc index (on record)))))
+    (fn [on index] (index-delete index on record))))
+
+(defn- index-build [records on]
+  (reduce
+    (fn [int-index record] (index-insert int-index on record))
+    (sorted-map)
+    records))
 
 (def- conj-op?
   #{:and :or})
@@ -251,20 +279,15 @@
     (select-plan db where order offset limit only)))
 
 (defn- q-create-index [db {:keys [on where]}]
+  (assert (not (on (:imap db))))
   (let [records (vals (:rmap db))
-        index
-          (reduce
-            (fn [int-index record]
-              (if-let [val (on record)]
-                (assoc int-index val (:id record))
-                int-index))
-            (sorted-map)
-            records)]
-    [(assoc-in db [:imap on] index) (count index)]))
+        index   (index-build records on)]
+    [(update db :imap assoc on index) 1]))
 
 (defn- q-drop-index [db {:keys [on]}]
-  (let [index (get-in db [:imap on])]
-    [(update-in db [:imap] dissoc on) (count index)]))
+  (let [index (on (:imap db))]
+    (assert index)
+    [(update db :imap dissoc on) 1]))
 
 (defn- q-list-indexes [db opts]
   (vec (keys (:imap db))))
