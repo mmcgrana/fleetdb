@@ -33,11 +33,13 @@
 (defn update [m k f & args]
   (assoc m k (apply f (get m k) args)))
 
-(defn greatest
-  ([coll]
-     (greatest compare coll))
-  ([compfn coll]
-     (first (sort #(compfn %2 %1) coll))))
+(defn greatest [coll]
+  (if (seq coll)
+    (apply max coll)))
 
-(defn least-by [keyfn coll]
-  (first (sort-by keyfn coll)))
+(defn least-by [key-fn coll]
+  (if (seq coll)
+    (reduce
+      (fn [mem elem]
+        (if (< (key-fn elem) (key-fn mem)) elem mem))
+      coll)))
