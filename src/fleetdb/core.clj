@@ -210,7 +210,7 @@
         o-plans (map #(order-plan % order) w-plans)]
     (least-by quantify-cost o-plans)))
 
-(defn- select-plan [db where order offset limit only]
+(defn- find-plan [db where order offset limit only]
   (-> (wo-plan db where order)
     (offset-plan offset)
     (limit-plan limit)
@@ -240,12 +240,15 @@
   (let [only (:only plan)]
     (map #(select-keys % only) (exec-source db plan))))
 
-(defn- q-select [db {:keys [where order offset limit only]}]
+(defn- find-records [db {:keys [where order offset limit only]}]
   (exec db
-    (select-plan db where order offset limit only)))
+    (find-plan db where order offset limit only)))
+
+(defn- q-select [db opts]
+  (find-records db opts))
 
 (defn- q-count [db opts]
-  (count (q-select db opts)))
+  (count (find-records db opts)))
 
 (defn- db-apply [db records apply-fn]
   (let [{old-rmap :rmap old-imap :imap} db
@@ -261,14 +264,14 @@
 
 (defn- q-update [db {:keys [with] :as opts}]
   (assert with)
-    (db-apply db (q-select db opts)
+    (db-apply db (find-records db opts)
       (fn [[int-rmap int-imap] old-record]
         (let [new-record (merge-compact old-record with)]
           [(rmap-update int-rmap old-record new-record)
            (imap-update int-imap old-record new-record)]))))
 
 (defn- q-delete [db opts]
-  (db-apply db (q-select db opts)
+  (db-apply db (find-records db opts)
     (fn [[int-rmap int-imap] old-record]
       [(rmap-delete int-rmap old-record)
        (imap-delete int-imap old-record)])))
@@ -276,7 +279,7 @@
 (defn- q-explain [db {[query-type opts] :query :as explain-opts}]
   (assert (= query-type :select))
   (let [{:keys [where order offset limit only]} opts]
-    (select-plan db where order offset limit only)))
+    (find-plan db where order offset limit only)))
 
 (defn- q-create-index [db {:keys [on where]}]
   (assert (not (on (:imap db))))
