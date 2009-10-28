@@ -20,6 +20,10 @@
 
 (defalias def- defvar-)
 
+(defmacro defmulti-
+  [name & decls]
+  (list* `defmulti (vary-meta name assoc :private true) decls))
+
 (defn merge-compact [m1 m2]
   (reduce
     (fn [m-int [k v]]

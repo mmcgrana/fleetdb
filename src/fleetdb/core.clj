@@ -116,7 +116,7 @@
     :else
       (raise (str "where op " op " not recognized"))))
 
-(defn- order-keyfn [attr dir]
+(defn- order-keyfn [[attr dir]]
   (assert (#{:asc :dsc} dir))
   (if (= dir :asc)
     (fn [record-a record-b]
@@ -124,28 +124,30 @@
     (fn [record-a record-b]
       (compare (attr record-b) (attr record-a)))))
 
-(defn- where-plans [db where order]
-  [{:action  :db-scan
-    :order   [:id :asc]
-    :size    :db
-    :cost    [:scan :db]}])
-
 (defn- filter-plan [source where]
   (if-not where
     source
     {:action  :filter
-     :options {:where where}
-     :order   (:order source)
+     :where   where
+     :ordered (:ordered source)
      :size    (:size source)
      :cost    [:scan (:size source)]
      :source  source}))
 
+(defn- where-plans [db where]
+  [(filter-plan
+      {:action  :db-scan
+       :ordered [:id :asc]
+       :size    :db
+       :cost    [:scan :db]}
+      where)])
+
 (defn- order-plan [source order]
-  (if (or (not order) (= order (:order source)))
+  (if (or (not order) (= order (:ordered source)))
     source
     {:action  :sort
-     :options {:order order}
      :order   order
+     :ordered order
      :size    (:size source)
      :cost    [:sort (:size source)]
      :source  source}))
@@ -154,8 +156,8 @@
   (if-not offset
     source
     {:action  :offset
-     :options {:offset offset}
-     :order   (:order source)
+     :offset  offset
+     :ordered (:ordered source)
      :size    (:size source)
      :cost    [:scan :range]
      :source  source}))
@@ -164,8 +166,8 @@
   (if-not limit
     source
     {:action  :limit
-     :options {:limit limit}
-     :order   (:order source)
+     :limit   limit
+     :ordered (:ordered source)
      :size    (:size source)
      :cost    [:scan :range]
      :source  source}))
@@ -174,8 +176,8 @@
   (if-not only
     source
     {:action  :only
-     :options {:only only}
-     :order   (:order source)
+     :only    only
+     :ordered (:ordered source)
      :size    (:size source)
      :cost    [:scan (:size source)]
      :source  source}))
@@ -204,7 +206,7 @@
     (greatest n-costs)))
 
 (defn- wo-plan [db where order]
-  (let [w-plans (where-plans db where order)
+  (let [w-plans (where-plans db where)
         o-plans (map #(order-plan % order) w-plans)]
     (least-by quantify-cost o-plans)))
 
@@ -214,34 +216,32 @@
     (limit-plan limit)
     (only-plan only)))
 
-(defn- execute-plan [db plan]
-  (let [{:keys [action options source]} plan]
-    (condp = action
-      :db-scan
-        (vals (:rmap db))
+(defmulti- exec (fn [db plan] (:action plan)))
 
-      :filter
-        (let [{:keys [where]} options]
-          (filter (where-pred where) (execute-plan db source)))
+(defn- exec-source [db plan]
+  (exec db (:source plan)))
 
-      :sort
-        (let [{[attr dir] :order} options]
-          (sort (order-keyfn attr dir) (execute-plan db source)))
+(defmethod exec :db-scan [db plan]
+  (vals (:rmap db)))
 
-      :offset
-        (let [{:keys [offset]} options]
-          (drop offset (execute-plan db source)))
+(defmethod exec :filter [db plan]
+  (filter (where-pred (:where plan)) (exec-source db plan)))
 
-      :limit
-        (let [{:keys [limit]} options]
-          (take limit (execute-plan db source)))
+(defmethod exec :sort [db plan]
+  (sort (order-keyfn (:order plan)) (exec-source db plan)))
 
-      :only
-        (let [{:keys [only]} options]
-          (map #(select-keys % only) (execute-plan db source))))))
+(defmethod exec :offset [db plan]
+  (drop (:offset plan) (exec-source db plan)))
+
+(defmethod exec :limit [db plan]
+  (take (:limit plan) (exec-source db plan)))
+
+(defmethod exec :only [db plan]
+  (let [only (:only plan)]
+    (map #(select-keys % only) (exec-source db plan))))
 
 (defn- q-select [db {:keys [where order offset limit only]}]
-  (execute-plan db
+  (exec db
     (select-plan db where order offset limit only)))
 
 (defn- q-count [db opts]
@@ -292,24 +292,22 @@
 (defn- q-list-indexes [db opts]
   (vec (keys (:imap db))))
 
-(declare exec)
+(declare query)
 
 (defn- q-multi-read [db {:keys [queries]}]
-  (vec
-    (map (fn [query] (exec db query))
-         queries)))
+  (vec (map #(query db %) queries)))
 
 (defn- q-multi-write [db {:keys [queries]}]
   (reduce
-    (fn [[int-db int-results] query]
-      (let [[aug-db result] (exec int-db query)]
+    (fn [[int-db int-results] q]
+      (let [[aug-db result] (query int-db query)]
         [aug-db (conj int-results result)]))
     [db []]
     queries))
 
 (defn- q-checked-write [db {:keys [check expect write]}]
-  (if (= (exec db check) expect)
-    (exec db write)))
+  (if (= (query db check) expect)
+    (query db write)))
 
 (def- query-fns
   {:select        q-select
@@ -325,7 +323,7 @@
    :multi-write   q-multi-write
    :checked-write q-checked-write})
 
-(defn exec [db [query-type opts]]
+(defn query [db [query-type opts]]
   (if-let [queryfn (query-fns query-type)]
     (queryfn db opts)
     (raise (str "query type " query-type " not recognized"))))
