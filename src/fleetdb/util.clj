@@ -33,13 +33,11 @@
 (defn update [m k f & args]
   (assoc m k (apply f (get m k) args)))
 
-(defn greatest [coll]
-  (if (seq coll)
-    (apply max coll)))
-
-(defn least-by [key-fn coll]
-  (if (seq coll)
-    (reduce
-      (fn [mem elem]
-        (if (< (key-fn elem) (key-fn mem)) elem mem))
-      coll)))
+(defn union-stream
+  ([colls]
+   (union-stream (apply concat colls) #{}))
+  ([unstreamed streamed]
+   (lazy-seq
+     (let [pruned (drop-while streamed unstreamed)]
+       (if-let [e (first pruned)]
+         (cons e (union-stream (rest pruned) (conj streamed e))))))))
