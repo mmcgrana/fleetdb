@@ -164,12 +164,17 @@
 (defn- where-plan [db where order]
   (let [[op & wrest] where]
     (cond
+      ; only choice -> optimal
       (not op)
         (root-plan db order)
 
+      ; only simple choice -> probably optimal
       (= :!= op)
         (root-filter-plan db where order)
 
+      ; when no index, use root-filter-plan -> optimal
+      ; when reasonable index and no order -> probably optimal
+      ; when reasonable index and order -> may be suboptimal, but reasonable
       (= := op)
         (let [[attr aval] wrest]
           (if (index-on db attr)
@@ -179,6 +184,7 @@
              :ordered false}
             (root-filter-plan db where order)))
 
+      ; as above
       (= :in op)
         (let [[attr in] wrest]
           (if (index-on db attr)
@@ -201,6 +207,9 @@
                :ordered ordered})
             (root-filter-plan db where order)))
 
+      ; when no indexes use root-filter-plan -> optimal
+      ; when some reasonable, most selective first index -> probably optimal
+      ; when non-index or not-most selective first -> suboptimal
       (= :and op)
         (let [main-plan     (where-plan db (first wrest) order)
               filter-wheres (next wrest)]
@@ -209,6 +218,7 @@
            :ordered (:ordered main-plan)
            :source  main-plan})
 
+      ; meh -> fair but not great
       (= :or op)
         (let [sub-plans (map #(where-plan db % order) wrest)]
           {:action  :union
