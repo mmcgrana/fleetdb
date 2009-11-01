@@ -2,7 +2,7 @@
   (use (fleetdb util)))
 
 (defn init []
-  {:rmap {}
+  {:rmap (sorted-map)
    :imap {}})
 
 (def- conj-op?
@@ -141,13 +141,19 @@
     (fn [spec index] (index-delete index spec record))))
 
 (defn- root-plan [db [attr dir :as order]]
-  (if (and order (index-get db {:on attr}))
-    {:action  :index-scan
-     :attr    attr
-     :dir     dir
-     :ordered true}
-    {:action  :db-scan
-     :ordered false}))
+  (cond
+    (= attr :id)
+      {:action  :rmap-scan
+       :dir     dir
+       :ordered true}
+    (and order (index-get db {:on attr}))
+      {:action  :index-scan
+       :attr    attr
+       :dir     dir
+       :ordered true}
+    :no-index
+      {:action  :db-scan
+       :ordered false}))
 
 (defn- filter-plan [source where]
   (if-not where
@@ -179,36 +185,58 @@
       ; when reasonable index and order -> may be suboptimal, but reasonable
       (= := op)
         (let [[attr aval] wrest]
-          (if (index-get db {:on attr})
-            {:action  :index-lookup
-             :attr    attr
-             :aval    aval
-             :ordered false}
-            (root-filter-plan db where order)))
+          (cond
+            (= attr :id)
+              {:action  :rmap-lookup
+               :id      aval
+               :ordered false}
+            (index-get db {:on attr})
+              {:action  :index-lookup
+               :attr    attr
+               :aval    aval
+               :ordered false}
+            :no-index
+              (root-filter-plan db where order)))
 
       ; as above
       (= :in op)
         (let [[attr in] wrest]
-          (if (index-get db {:on attr})
-            {:action  :index-multilookup
-             :attr    attr
-             :in      in
-             :ordered false}
-            (root-filter-plan db where order)))
+          (cond
+            (= attr :id)
+              {:action  :rmap-multilookup
+               :ids     in
+               :ordered false}
+            (index-get db {:on attr})
+              {:action  :index-multilookup
+               :attr    attr
+               :in      in
+               :ordered false}
+            :no-index
+              (root-filter-plan db where order)))
 
       ; hmm
       (range-op? op)
         (let [[attr aval] wrest]
-          (if (index-get db {:on attr})
-            (let [[oattr odir] order
-                  ordered      (= attr oattr)]
-              {:action  :index-range
-               :attr    attr
-               :dir     (if ordered oattr)
-               :op      op
-               :aval    aval
-               :ordered ordered})
-            (root-filter-plan db where order)))
+          (cond
+            (= attr :id)
+              (let [[oattr odir] order
+                    ordered      (= :id oattr)]
+                {:action  :rmap-range
+                 :dir     (if ordered oattr)
+                 :op      op
+                 :idval   aval
+                 :ordered ordered})
+            (index-get db {:on attr})
+              (let [[oattr odir] order
+                    ordered      (= attr oattr)]
+                {:action  :index-range
+                 :attr    attr
+                 :dir     (if ordered oattr)
+                 :op      op
+                 :aval    aval
+                 :ordered ordered})
+            :no-index
+              (root-filter-plan db where order)))
 
       ; when no indexes use root-filter-plan -> optimal
       ; when some reasonable, most selective first index -> probably optimal
@@ -229,7 +257,7 @@
            :source  sub-plans})
 
       :else
-        (raise "where op " op " not recognized"))))
+        (raise (str "where op " op " not recognized")))))
 
 (defn- order-plan [source order]
   (if (or (not order) (:ordered source))
@@ -275,6 +303,10 @@
 (defmethod exec :db-scan [{:keys [rmap]} plan]
   (vals rmap))
 
+(defmethod exec :rmap-scan [{:keys [rmap]} {:keys [dir]}]
+  (let [seq-fn (if (= dir :asc) seq rseq)]
+    (map val (seq-fn rmap))))
+
 (defmethod exec :index-scan [db {:keys [attr dir]}]
   (let [index    (index-get db {:on attr})
         seq-fn   (if (= dir :asc) seq rseq)
@@ -287,10 +319,16 @@
         indexed (index aval)]
     (index-flatten1 indexed)))
 
+(defmethod exec :rmap-lookup [{:keys [rmap]} {:keys [id]}]
+  (get rmap id))
+
 (defmethod exec :index-multilookup [db {:keys [attr in]}]
   (let [index    (index-get db {:on attr})
         indexeds (map index in)]
     (index-flatten indexeds)))
+
+(defmethod exec :rmap-multilookup [{:keys [rmap]} {:keys [ids]}]
+  (map rmap ids))
 
 (def- one-sided-op-fns
   {:< < :<= <= :> > :>= >=})
@@ -298,16 +336,21 @@
 (def- two-sided-op-fns
   {:>< [> <] :>=< [>= <] :><= [> <=] :>=<= [>= <=]})
 
-(defmethod exec :index-range [db {:keys [attr dir op aval]}]
-  (let [index     (index-get db {:on attr})
-        subseq-fn (if (= dir :asc) subseq rsubseq)
+(defn- index-range [index dir op ival]
+  (let [subseq-fn (if (= dir :asc) subseq rsubseq)
         pairs     (if-let [op-fn (one-sided-op-fns op)]
-                    (subseq-fn index op-fn aval)
+                    (subseq-fn index op-fn ival)
                     (let [[op-fn1 op-fn2] (two-sided-op-fns op)
-                          [aval1  aval2]   aval]
-                      (subseq-fn index op-fn1 aval1 op-fn2 aval2)))
-        indexeds  (map val pairs)]
-    (index-flatten indexeds)))
+                          [ival1  ival2]  ival]
+                      (subseq-fn index op-fn1 ival1 op-fn2 ival2)))]
+    (map val pairs)))
+
+(defmethod exec :index-range [db {:keys [attr dir op aval]}]
+  (let [index     (index-get db {:on attr})]
+    (index-flatten (index-range index dir op aval))))
+
+(defmethod exec :rmap-range [{:keys [rmap]} {:keys [dir op idval]}]
+  (index-range rmap dir op idval))
 
 (defmethod exec :union [db {:keys [source]}]
   (union-stream (map #(exec db %) source)))
