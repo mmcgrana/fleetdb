@@ -2,88 +2,8 @@
   (use (fleetdb util)))
 
 (defn init []
-  {:rmap (sorted-map)
-   :imap (sorted-map)})
-
-(defn- rmap-insert [rmap record]
-  (let [id (:id record)]
-    (assert id)
-    (assert (not (contains? rmap id)))
-    (assoc rmap (:id record) record)))
-
-(defn- rmap-update [rmap old-record new-record]
-  (assoc rmap (:id old-record) new-record))
-
-(defn- rmap-delete [rmap old-record]
-  (dissoc rmap (:id old-record)))
-
-(defn- index-on [db attr]
-  (attr (:imap db)))
-
-(defn- index-insert [index on record]
-  (let [aval    (on record)
-        indexed (get index aval)]
-    (update index aval
-      (fn [indexed]
-        (cond
-          (nil? indexed) record
-          (set? indexed) (conj indexed record)
-          :single-record (hash-set indexed record))))))
-
-(defn- index-delete [index on record]
-  (let [aval    (on record)
-        indexed (aval index)]
-    (update index aval
-      (fn [indexed]
-        (if (and (set? indexed) (> 1 (count indexed)))
-          (do
-            (assert (contains? indexed record))
-            (disj indexed record))
-          (do
-            (assert (= #{record} indexed))
-            nil))))))
-
-(defn- index-build [records on]
-  (reduce
-    (fn [int-index record] (index-insert int-index on record))
-    (sorted-map)
-    records))
-
-(defn- index-flatten1 [indexed]
-  (if (and indexed (not (set? indexed)))
-    (list indexed)))
-
-(defn- index-flatten [indexeds]
-  (lazy-seq
-    (when-let [iseq (seq indexeds)]
-      (let [f (first iseq) r (rest iseq)]
-        (cond
-          (nil? f) r
-          (set? f) (concat f r)
-          :single  (cons f r))))))
-
-(defn- imap-apply [imap apply-fn]
-  (reduce
-    (fn [int-imap [on index]]
-      (assoc int-imap (apply-fn on index)))
-    {}
-    imap))
-
-(defn- imap-insert [imap record]
-  (imap-apply imap
-    (fn [on index]
-      (index-insert index on record))))
-
-(defn- imap-update [imap old-record new-record]
-  (imap-apply imap
-    (fn [on index]
-      (-> index
-        (index-delete on old-record)
-        (index-insert  on new-record)))))
-
-(defn- imap-delete [imap record]
-  (imap-apply imap
-    (fn [on index] (index-delete index on record))))
+  {:rmap {}
+   :imap {}})
 
 (def- conj-op?
   #{:and :or})
@@ -138,8 +58,90 @@
     (fn [record-a record-b]
       (compare (attr record-b) (attr record-a)))))
 
+(defn- rmap-insert [rmap record]
+  (let [id (:id record)]
+    (assert id)
+    (assert (not (contains? rmap id)))
+    (assoc rmap (:id record) record)))
+
+(defn- rmap-update [rmap old-record new-record]
+  (assoc rmap (:id old-record) new-record))
+
+(defn- rmap-delete [rmap old-record]
+  (dissoc rmap (:id old-record)))
+
+(defn- index-get [db spec]
+  (get (:imap db) spec))
+
+(defn- index-insert [index {:keys [on where]} record]
+  (if (and where (not ((where-pred where) record)))
+    index
+    (update index (on record)
+      (fn [indexed]
+        (cond
+          (nil? indexed) record
+          (set? indexed) (conj indexed record)
+          :single-record (hash-set indexed record))))))
+
+(defn- index-delete [index {:keys [on where]} record]
+  (if (and where (not ((where-pred where) record)))
+    index
+    (let [aval    (on record)
+          indexed (aval index)]
+      (update index aval
+        (fn [indexed]
+          (if (and (set? indexed) (> 1 (count indexed)))
+            (do
+              (assert (contains? indexed record))
+              (disj indexed record))
+            (do
+              (assert (= #{record} indexed))
+              nil)))))))
+
+(defn- index-build [records spec]
+  (reduce
+    (fn [int-index record] (index-insert int-index spec record))
+    (sorted-map)
+    records))
+
+(defn- index-flatten1 [indexed]
+  (if (and indexed (not (set? indexed)))
+    (list indexed)))
+
+(defn- index-flatten [indexeds]
+  (lazy-seq
+    (when-let [iseq (seq indexeds)]
+      (let [f (first iseq) r (rest iseq)]
+        (cond
+          (nil? f) r
+          (set? f) (concat f r)
+          :single  (cons f r))))))
+
+(defn- imap-apply [imap apply-fn]
+  (reduce
+    (fn [int-imap [spec index]]
+      (assoc int-imap (apply-fn spec index)))
+    {}
+    imap))
+
+(defn- imap-insert [imap record]
+  (imap-apply imap
+    (fn [spec index]
+      (index-insert index spec record))))
+
+(defn- imap-update [imap old-record new-record]
+  (imap-apply imap
+    (fn [spec index]
+      (-> index
+        (index-delete spec old-record)
+        (index-insert spec new-record)))))
+
+(defn- imap-delete [imap record]
+  (imap-apply imap
+    (fn [spec index] (index-delete index spec record))))
+
 (defn- root-plan [db [attr dir :as order]]
-  (if (and order (index-on db attr))
+  (if (and order (index-get db {:on attr}))
     {:action  :index-scan
      :attr    attr
      :dir     dir
@@ -177,7 +179,7 @@
       ; when reasonable index and order -> may be suboptimal, but reasonable
       (= := op)
         (let [[attr aval] wrest]
-          (if (index-on db attr)
+          (if (index-get db {:on attr})
             {:action  :index-lookup
              :attr    attr
              :aval    aval
@@ -187,16 +189,17 @@
       ; as above
       (= :in op)
         (let [[attr in] wrest]
-          (if (index-on db attr)
+          (if (index-get db {:on attr})
             {:action  :index-multilookup
              :attr    attr
              :in      in
              :ordered false}
             (root-filter-plan db where order)))
 
+      ; hmm
       (range-op? op)
         (let [[attr aval] wrest]
-          (if (index-on db attr)
+          (if (index-get db {:on attr})
             (let [[oattr odir] order
                   ordered      (= attr oattr)]
               {:action  :index-range
@@ -273,19 +276,19 @@
   (vals rmap))
 
 (defmethod exec :index-scan [db {:keys [attr dir]}]
-  (let [index    (index-on db attr)
+  (let [index    (index-get db {:on attr})
         seq-fn   (if (= dir :asc) seq rseq)
         pairs    (seq-fn index)
         indexeds (map val pairs)]
     (index-flatten indexeds)))
 
 (defmethod exec :index-lookup [db {:keys [attr aval]}]
-  (let [index   (index-on db attr)
+  (let [index   (index-get db {:on attr})
         indexed (index aval)]
     (index-flatten1 indexed)))
 
 (defmethod exec :index-multilookup [db {:keys [attr in]}]
-  (let [index    (index-on db attr)
+  (let [index    (index-get db {:on attr})
         indexeds (map index in)]
     (index-flatten indexeds)))
 
@@ -296,7 +299,7 @@
   {:>< [> <] :>=< [>= <] :><= [> <=] :>=<= [>= <=]})
 
 (defmethod exec :index-range [db {:keys [attr dir op aval]}]
-  (let [index     (index-on db attr)
+  (let [index     (index-get db {:on attr})
         subseq-fn (if (= dir :asc) subseq rsubseq)
         pairs     (if-let [op-fn (one-sided-op-fns op)]
                     (subseq-fn index op-fn aval)
@@ -365,19 +368,19 @@
   (let [{:keys [where order offset limit only]} opts]
     (find-plan db where order offset limit only)))
 
-(defn- q-create-index [db {:keys [on where]}]
-  (assert (not (on (:imap db))))
+(defn- q-create-index [db spec]
+  (assert (not (index-get db spec)))
   (let [records (vals (:rmap db))
-        index   (index-build records on)]
-    [(update db :imap assoc on index) 1]))
+        index   (index-build records spec)]
+    [(update db :imap assoc spec index) 1]))
 
-(defn- q-drop-index [db {:keys [on]}]
-  (let [index (on (:imap db))]
+(defn- q-drop-index [db spec]
+  (let [index (index-get db spec)]
     (assert index)
-    [(update db :imap dissoc on) 1]))
+    [(update db :imap dissoc spec) 1]))
 
 (defn- q-list-indexes [db opts]
-  (vec (keys (:imap db))))
+  (keys (:imap db)))
 
 (declare query)
 
