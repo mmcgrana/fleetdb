@@ -235,7 +235,7 @@
   (if (or (not order) (:ordered source))
     source
     {:action  :sort
-     :orde    order
+     :order   order
      :ordered true
      :source  source}))
 
