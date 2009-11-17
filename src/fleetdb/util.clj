@@ -41,3 +41,13 @@
      (let [pruned (drop-while streamed unstreamed)]
        (if-let [e (first pruned)]
          (cons e (union-stream (rest pruned) (conj streamed e))))))))
+
+(defn vec-pad [v n e]
+  (let [d (- n (count v))]
+    (if (zero? d) v (apply conj v (repeat d e)))))
+
+(defn high [comp coll]
+  (if (seq coll)
+    (reduce
+      (fn [h e] (if (> 0 (comp h e)) e h))
+      coll)))

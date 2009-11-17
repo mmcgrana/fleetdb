@@ -31,8 +31,8 @@
         (fn [record]
           (conj-op-fn (map #(% record) subpreds))))
     (sing-op? op)
-      (let [[attr aval]  wrest
-            sing-op-fn (sing-op-fns op)]
+      (let [[attr aval] wrest
+            sing-op-fn  (sing-op-fns op)]
         (fn [record]
           (sing-op-fn (attr record) aval)))
     (doub-op? op)
@@ -346,7 +346,7 @@
     (map val pairs)))
 
 (defmethod exec :index-range [db {:keys [attr dir op aval]}]
-  (let [index     (index-get db {:on attr})]
+  (let [index (index-get db {:on attr})]
     (index-flatten (index-range index dir op aval))))
 
 (defmethod exec :rmap-range [{:keys [rmap]} {:keys [dir op idval]}]
