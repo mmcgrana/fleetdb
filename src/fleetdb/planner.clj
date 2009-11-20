@@ -30,20 +30,31 @@
         (recur (conj left-vp pos-inf) (conj right-vp neg-inf) (rest rispec)))
       [left-vp right-vp])))
 
-(defn- conds-order-ipplan [ispec eq ineq where order]
-  (let [[rispec left-val left-inc right-val right-inc where-count]
-    (loop [rispec ispec left-val [] right-val [] where-count 0]
+(defn- build-where-left [eq-left ineq-left other]
+  (let [eq-conds   (map second (vals eq-left))
+        ineq-conds (map second (vals ineq-left))
+        conds      (concat eq-conds ineq-conds other)]
+    (cond
+      (empty? conds)      nil
+      (= 1 (count conds)) (first conds)
+      :multi-cond         (vec (cons :and conds)))))
+
+(defn- conds-order-ipplan [ispec eq ineq other where order]
+  (let [[rispec left-val left-inc right-val right-inc where-count where-left]
+    (loop [rispec ispec left-val [] right-val [] where-count 0 eq-left eq]
       (if-not rispec
-        [nil left-val true right-val true where-count]
+        [nil left-val true right-val true where-count (build-where-left eq-left ineq other)]
         (let [[icattr icdir] (first rispec)
               rrispec        (next rispec)]
-          (if-let [v (get eq icattr)]
-            (recur rrispec (conj left-val v) (conj right-val v) (inc where-count))
-            (if-let [[low-v low-i high-v high-i] (get ineq icattr)]
-              (if (= icdir :asc)
-                [rrispec (conj left-val low-v)  low-i  (conj right-val high-v) high-i (inc where-count)]
-                [rrispec (conj left-val high-v) high-i (conj right-val low-v)  low-i  (inc where-count)])
-              [rispec left-val true right-val true where-count])))))]
+          (if-let [[v _] (get eq-left icattr)]
+            (recur rrispec (conj left-val v) (conj right-val v)
+                   (inc where-count) (dissoc eq-left icattr))
+            (if-let [[[low-v low-i high-v high-i] _] (get ineq icattr)]
+              (let [w-left (build-where-left eq-left (dissoc ineq icattr) other)]
+                (if (= icdir :asc)
+                  [rrispec (conj left-val low-v)  low-i  (conj right-val high-v) high-i (inc where-count) w-left]
+                  [rrispec (conj left-val high-v) high-i (conj right-val low-v)  low-i  (inc where-count) w-left]))
+              [rispec left-val true right-val true where-count (build-where-left eq-left ineq other)])))))]
     (let [[order-left order-count sdir]
       (cond
         (empty? order)
@@ -63,7 +74,7 @@
          :right-val   right-val
          :right-inc   right-inc
          :sdir        sdir
-         :where-left  where
+         :where-left  where-left
          :order-left  order-left}))))
 
 (defn- flatten-where [where]
@@ -99,27 +110,27 @@
 
 (defn- partition-conds [conds]
   (reduce
-    (fn [[eq ineq] acond]
+    (fn [[eq ineq other] acond]
       (let [[cop cattr cval] acond]
         (cond
           (eq-op? cop)
             (if (contains? eq cattr)
               (raise (str "duplicate equality on " cattr))
-              [(assoc eq cattr cval) ineq])
+              [(assoc eq cattr [cval acond]) ineq other])
           (ineq-op? cop)
             (if (contains? ineq cattr)
               (raise (str "duplicate inequality on " cattr))
-              [eq (assoc ineq cattr (cond-low-high cop cval))])
+              [eq (assoc ineq cattr [(cond-low-high cop cval) acond]) other])
           (other-op? cop)
-            [eq ineq]
+            [eq ineq (conj other acond)]
           :else
             (raise (str "invalid where " acond)))))
-    [{} {}]
+    [{} {} []]
     conds))
 
 (defn- where-order-ipplans [ispecs where order]
-  (let [[eq ineq] (-> where flatten-where partition-conds)]
-    (map #(conds-order-ipplan % eq ineq where order) ispecs)))
+  (let [[eq ineq other] (-> where flatten-where partition-conds)]
+    (map #(conds-order-ipplan % eq ineq other where order) ispecs)))
 
 (defn- ipplan-compare [a b]
   (compare [(:where-count a) (:order-count a)] [(:where-count b) (:order-count b)]))
