@@ -20,23 +20,23 @@
     (number? a)
       (Numbers/compare a b)
     :else
-      (.compareTo a b)))
+      (.compareTo #^Comparable a #^Comparable b)))
 
-(defn index-compare [order]
+(defn order-compare [order]
   (let [[[attr dir] & rorder] order]
     (if (not rorder)
       (cond
         (= dir :asc)
-          #(compare* %1 %2)
+          #(compare* (attr %1) (attr %2))
         (= dir :dsc)
-          #(compare* %2 %1)
+          #(compare* (attr %2) (attr %1))
         :else
           (raise ("invalid order " order)))
-      (let [rcompare (index-compare rorder)]
+      (let [rcompare (order-compare rorder)]
         (cond
           (= dir :asc)
-            #(let [c (compare* %1 %2)] (if (zero? c) (rcompare %1 %2) c))
+            #(let [c (compare* (attr %1) (attr %2))] (if (zero? c) (rcompare %1 %2) c))
           (= dir :dsc)
-            #(let [c (compare* %2 %1)] (if (zero? c) (rcompare %1 %2) c))
+            #(let [c (compare* (attr %2) (attr %1))] (if (zero? c) (rcompare %1 %2) c))
           :else
             (raise "invalid order " order))))))

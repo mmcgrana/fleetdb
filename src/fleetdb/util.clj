@@ -15,7 +15,7 @@
 
 (def != (complement =))
 
-(defn raise [msg]
+(defn raise [#^String msg]
   (throw (Exception. msg)))
 
 (defalias def- defvar-)
@@ -33,14 +33,14 @@
 (defn update [m k f & args]
   (assoc m k (apply f (get m k) args)))
 
-(defn union-stream
-  ([colls]
-   (union-stream (apply concat colls) #{}))
-  ([unstreamed streamed]
-   (lazy-seq
-     (let [pruned (drop-while streamed unstreamed)]
-       (if-let [e (first pruned)]
-         (cons e (union-stream (rest pruned) (conj streamed e))))))))
+(defn uniq [coll]
+  (lazy-seq
+    (when-let [s (seq coll)]
+      (let [f (first s) r (rest s)]
+        (cons f (uniq (drop-while #(= f %) r)))))))
+
+(defn compact [coll]
+  (filter #(not (nil? %)) coll))
 
 (defn vec-pad [v n e]
   (let [d (- n (count v))]
