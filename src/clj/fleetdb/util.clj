@@ -51,3 +51,6 @@
     (reduce
       (fn [h e] (if (> 0 (comp h e)) e h))
       coll)))
+
+(defn mash [f m]
+  (reduce (fn [int-m [k v]] (assoc int-m k (f k v))) {} m))

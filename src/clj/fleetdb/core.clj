@@ -1,41 +1,284 @@
 (ns fleetdb.core
-  (use (fleetdb util)))
+  (:import (clojure.lang Numbers Sorted))
+  (:use (fleetdb util)))
 
-(defn init []
-  {:rmap (sorted-map)
-   :imap {}})
+;; General ordering
 
-(def- conj-op?
-  #{:and :or})
+(def- neg-inf :neg-inf)
+(def- pos-inf :pos-inf)
+
+(defn- compare* [a b]
+  (cond
+    (identical? a b)
+      0
+    (or (identical? a neg-inf) (identical? b pos-inf))
+      -1
+    (or (identical? a pos-inf) (identical? b neg-inf))
+      1
+    (nil? a)
+      -1
+    (nil? b)
+      1
+    (number? a)
+      (Numbers/compare a b)
+    :else
+      (.compareTo #^Comparable a #^Comparable b)))
+
+(defn- record-compare [order]
+  (let [[[attr dir] & rorder] order]
+    (if (not rorder)
+      (cond
+        (= dir :asc)
+          #(compare* (attr %1) (attr %2))
+        (= dir :dsc)
+          #(compare* (attr %2) (attr %1))
+        :else
+          (raise ("invalid order " order)))
+      (let [rcompare (record-compare rorder)]
+        (cond
+          (= dir :asc)
+            #(let [c (compare* (attr %1) (attr %2))] (if (zero? c) (rcompare %1 %2) c))
+          (= dir :dsc)
+            #(let [c (compare* (attr %2) (attr %1))] (if (zero? c) (rcompare %1 %2) c))
+          :else
+            (raise "invalid order " order))))))
+
+(defn- attr-compare [order]
+  (let [[[attr dir] & rorder] order]
+    (if (not rorder)
+      (cond
+        (= dir :asc)
+          #(compare* %1 %2)
+        (= dir :dsc)
+          #(compare* %2 %1)
+        :else
+          (raise (str "invalid order " order)))
+      (let [rcompare (attr-compare rorder)]
+        (cond
+          (= dir :asc)
+            #(let [c (compare* (first %1) (first %2))]
+               (if (zero? c)
+                 (rcompare (rest %1) (rest %2))
+                 c))
+          (= dir :dsc)
+            #(let [c (compare* (first %1) (first %2))]
+               (if (zero? c)
+                 (rcompare (rest %1) (rest %2))
+                   c))
+          :else
+            (raise "invalid order " order))))))
+
+;; Find planning
+
+(defn- filter-plan [source where]
+  (if where [:filter where source] source))
+
+(defn- sort-plan [source order]
+  (if order [:sort order source] source))
+
+(defn- rmap-scan-plan [where order]
+  (-> [:rmap-scan]
+    (filter-plan where)
+    (sort-plan order)))
+
+(defn- index-order-prefix? [ispec order]
+  (= (take (count order) ispec)
+     order))
+
+(def- flip-idir
+  {:asc :dsc :dsc :asc})
+
+(defn- flip-order [order]
+  (map (fn [[attr dir]] [attr (flip-idir dir)]) order))
+
+(defn- val-pad [left-v right-v ispec]
+  (loop [left-vp left-v right-vp right-v rispec (drop (count left-v) ispec)]
+    (if-let [[icattr icdir] (first rispec)]
+      (if (= icdir :asc)
+        (recur (conj left-vp neg-inf) (conj right-vp pos-inf) (rest rispec))
+        (recur (conj left-vp pos-inf) (conj right-vp neg-inf) (rest rispec)))
+      [left-vp right-vp])))
+
+(defn- build-where-left [eq-left ineq-left other]
+  (let [eq-conds   (map second (vals eq-left))
+        ineq-conds (map second (vals ineq-left))
+        conds      (concat eq-conds ineq-conds other)]
+    (cond
+      (empty? conds)      nil
+      (= 1 (count conds)) (first conds)
+      :multi-cond         (vec (cons :and conds)))))
+
+(defn- conds-order-ipplan [ispec eq ineq other where order]
+  (let [[rispec left-val left-inc right-val right-inc where-count where-left]
+    (loop [rispec ispec left-val [] right-val [] where-count 0 eq-left eq]
+      (if-not rispec
+        [nil left-val true right-val true where-count (build-where-left eq-left ineq other)]
+        (let [[icattr icdir] (first rispec)
+              rrispec        (next rispec)]
+          (if-let [[v _] (get eq-left icattr)]
+            (recur rrispec (conj left-val v) (conj right-val v)
+                   (inc where-count) (dissoc eq-left icattr))
+            (if-let [[[low-v low-i high-v high-i] _] (get ineq icattr)]
+              (let [w-left (build-where-left eq-left (dissoc ineq icattr) other)]
+                (if (= icdir :asc)
+                  [rrispec (conj left-val low-v)  low-i  (conj right-val high-v) high-i (inc where-count) w-left]
+                  [rrispec (conj left-val high-v) high-i (conj right-val low-v)  low-i  (inc where-count) w-left]))
+              [rispec left-val true right-val true where-count (build-where-left eq-left ineq other)])))))]
+    (let [[order-left order-count sdir]
+      (cond
+        (empty? order)
+          [nil 0 :left-right]
+        (index-order-prefix? rispec order)
+          [nil (count order) :left-right]
+        (index-order-prefix? rispec (flip-order order))
+          [nil (count order) :right-left]
+        :else
+          [order 0 :left-right])]
+      (let [[left-val right-val] (val-pad left-val right-val ispec)]
+        {:ispec       ispec
+         :where-count where-count
+         :order-count order-count
+         :left-val    left-val
+         :left-inc    left-inc
+         :right-val   right-val
+         :right-inc   right-inc
+         :sdir        sdir
+         :where-left  where-left
+         :order-left  order-left}))))
+
+(defn- flatten-where [where]
+  (cond
+    (not where)
+      nil
+    (= :and (first where))
+      (rest where)
+    :single-op
+      (list where)))
+
+(def- eq-op?
+  #{:=})
+
+(def- ineq-op?
+  #{:< :<= :> :>= :>< :>=< :><= :>=<=})
+
+(def- other-op?
+  #{:!= :in :or})
+
+(defn- cond-low-high [op v]
+  (condp = op
+    :<  [neg-inf true  v       false]
+    :<= [neg-inf true  v       true ]
+    :>  [v       false pos-inf true ]
+    :>= [v       true  pos-inf true ]
+    (let [[v1 v2] v]
+      (condp = op
+        :><   [v1 false v2 false]
+        :>=<  [v1 true  v2 false]
+        :><=  [v1 false v2 true ]
+        :>=<= [v1 true  v2 true ]))))
+
+(defn- partition-conds [conds]
+  (reduce
+    (fn [[eq ineq other] acond]
+      (let [[cop cattr cval] acond]
+        (cond
+          (eq-op? cop)
+            (if (contains? eq cattr)
+              (raise (str "duplicate equality on " cattr))
+              [(assoc eq cattr [cval acond]) ineq other])
+          (ineq-op? cop)
+            (if (contains? ineq cattr)
+              (raise (str "duplicate inequality on " cattr))
+              [eq (assoc ineq cattr [(cond-low-high cop cval) acond]) other])
+          (other-op? cop)
+            [eq ineq (conj other acond)]
+          :else
+            (raise (str "invalid where " acond)))))
+    [{} {} []]
+    conds))
+
+(defn- where-order-ipplans [ispecs where order]
+  (let [[eq ineq other] (-> where flatten-where partition-conds)]
+    (map #(conds-order-ipplan % eq ineq other where order) ispecs)))
+
+(defn- ipplan-compare [a b]
+  (compare [(:where-count a) (:order-count a)] [(:where-count b) (:order-count b)]))
+
+(defn- ipplan-useful? [ipplan]
+  (pos? (+ (:where-count ipplan) (:order-count ipplan))))
+
+(defn- ipplan-plan [{:keys [ispec sdir left-val left-inc right-val right-inc
+                            where-left order-left]}]
+  (let [left-val-t  (if (= (count left-val)  1) (first left-val)  left-val)
+        right-val-t (if (= (count right-val) 1) (first right-val) right-val)]
+    (-> (if (= left-val-t right-val-t)
+          [:index-lookup [ispec left-val-t]]
+          [:index-seq    [ispec sdir left-val-t left-inc right-val-t right-inc]])
+      (filter-plan where-left)
+      (sort-plan   order-left))))
+
+(defn- where-order-plan* [ispecs where order]
+  (let [ipplans (where-order-ipplans ispecs where order)
+        ipplan  (high ipplan-compare ipplans)]
+    (if (and ipplan (ipplan-useful? ipplan))
+      (ipplan-plan ipplan)
+      (rmap-scan-plan where order))))
+
+(defn- where-order-plan [ispecs where order]
+  (cond
+    (and (= (get where 0) :=) (= (get where 1) :id))
+      [:rmap-lookup (get where 2)]
+
+    (and (= (get where 0) :in) (= (get where 1) :id))
+      (-> [:rmap-multilookup (get where 2)]
+        (sort-plan order))
+
+    (= (get where 0) :or)
+      [:union order (map #(where-order-plan ispecs % order) (next where))]
+
+    :else
+      (where-order-plan* ispecs where order)))
+
+(defn- offset-plan [source offset]
+  (if offset [:offset offset source] source))
+
+(defn- limit-plan [source limit]
+  (if limit [:limit limit source] source))
+
+(defn- only-plan [source only]
+  (if only [:only only source] source))
+
+(defn find-plan [ispecs where order offset limit only]
+  (-> (where-order-plan ispecs where order)
+   (offset-plan offset)
+   (limit-plan  limit)
+   (only-plan   only)))
+
+
+;; Find execution
 
 (def- conj-op-fns
   {:and and? :or or?})
 
-(def- sing-op?
-  #{:= :!= :< :> :<= :> :>=})
-
 (def- sing-op-fns
   {:= = :!= != :< < :<= <= :> > :>= >=})
-
-(def- doub-op?
-  #{:>< :>=< :><= :>=<=})
 
 (def- doub-op-fns
   {:>< [> <] :>=< [>= <] :><= [> <=] :>=<= [>= <=]})
 
 (defn- where-pred [[op & wrest]]
   (cond
-    (conj-op? op)
+    (conj-op-fns op)
       (let [subpreds (map #(where-pred %) wrest)
             conj-op-fn  (conj-op-fns op)]
         (fn [record]
           (conj-op-fn (map #(% record) subpreds))))
-    (sing-op? op)
+    (sing-op-fns op)
       (let [[attr aval] wrest
             sing-op-fn  (sing-op-fns op)]
         (fn [record]
           (sing-op-fn (attr record) aval)))
-    (doub-op? op)
+    (doub-op-fns op)
       (let [[attr [aval1 aval2]] wrest
             [doub-op-fn1 doub-op-fn2]      (doub-op-fns op)]
         (fn [record]
@@ -50,13 +293,84 @@
     :else
       (raise (str "where op " op " not recognized"))))
 
-(defn- order-keyfn [[attr dir]]
-  (assert (#{:asc :dsc} dir))
-  (if (= dir :asc)
-    (fn [record-a record-b]
-      (compare (attr record-a) (attr record-b)))
-    (fn [record-a record-b]
-      (compare (attr record-b) (attr record-a)))))
+(defmulti- exec-plan (fn [db [plan-type _]] plan-type))
+
+(defmethod exec-plan :filter [db [_ where source]]
+  (filter (where-pred where) (exec-plan db source)))
+
+(defmethod exec-plan :sort [db [_ order source]]
+  (sort (record-compare order) (exec-plan db source)))
+
+(defmethod exec-plan :offset [db [_ offset source]]
+  (drop offset (exec-plan db source)))
+
+(defmethod exec-plan :limit [db [_ limit source]]
+  (take limit (exec-plan db source)))
+
+(defmethod exec-plan :only [db [_ only source]]
+  (map #(select-keys % only) (exec-plan db source)))
+
+(defmethod exec-plan :union [db [_ order sources]]
+  (uniq
+    (sort (record-compare order)
+      (apply concat (map #(exec-plan db %) sources)))))
+
+(defmethod exec-plan :rmap-lookup [db [_ id _]]
+  (get-in db [:rmap id]))
+
+(defmethod exec-plan :rmap-multilookup [db [_ ids _]]
+  (let [rmap (:rmap db)]
+    (compact (map #(get rmap %) ids))))
+
+(defmethod exec-plan :rmap-scan [db _]
+  (vals (:rmap db)))
+
+(defn- indexed-flatten1 [indexed]
+  (cond (nil? indexed) nil
+        (set? indexed) indexed
+        :single        (list indexed)))
+
+(defn- indexed-flatten [indexeds]
+  (lazy-seq
+    (when-let [iseq (seq indexeds)]
+      (let [f (first iseq) r (rest iseq)]
+        (cond
+          (nil? f) r
+          (set? f) (concat f r)
+          :single  (cons f r))))))
+
+(defmethod exec-plan :index-lookup [db [_ [ispec val]]]
+  (indexed-flatten1 (get-in db [:imap ispec val])))
+
+(defmethod exec-plan :index-seq
+  [db [_ [ispec sdir left-val left-inc right-val right-inc]]]
+    (let [#^Sorted index (get-in db [:imap ispec])
+          indexeds
+      (if (= sdir :left-right)
+        (let [base    (.seqFrom index left-val true)
+              base-l  (if (or left-inc (!= (key (first base)) left-val))
+                        base
+                        (rest base))
+              base-lr (if right-inc
+                        (take-while #(<= 0 (compare* (key %) right-val)) base-l)
+                        (take-while #(<  0 (compare* (key %) right-val)) base-l))]
+          (vals base-lr))
+        (let [base    (.seqFrom index right-val false)
+              base-r  (if (or right-inc (!= (key (first base)) right-val))
+                        base
+                        (rest base))
+              base-rl (if left-inc
+                        (take-while #(>= 0 (compare* (key %) left-val)) base-r)
+                        (take-while #(>  0 (compare* (key %) left-val)) base-r))]
+          (vals base-rl)))]
+      (indexed-flatten indexeds)))
+
+(defn- find-records [db {:keys [where order offset limit only]}]
+  (exec-plan db
+    (find-plan (keys (:imap db)) where order offset limit only)))
+
+
+;; RMap and IMap manipulation
 
 (defn- rmap-insert [rmap record]
   (let [id (:id record)]
@@ -70,367 +384,125 @@
 (defn- rmap-delete [rmap old-record]
   (dissoc rmap (:id old-record)))
 
-(defn- index-get [db spec]
-  (get (:imap db) spec))
+(defn- ispec-on-fn [ispec]
+  (let [attrs (map first ispec)]
+    (cond
+      (empty? attrs)      (raise (str "empty ispec: " ispec))
+      (= 1 (count attrs)) (first attrs)
+      :multi-attr         #(vec (map % attrs)))))
 
-(defn- index-insert [index {:keys [on where]} record]
-  (if (and where (not ((where-pred where) record)))
-    index
-    (update index (on record)
+(defn- index-insert [index on-fn record]
+  (update index (on-fn record)
+    (fn [indexed]
+      (cond
+        (nil? indexed) record
+        (set? indexed) (conj indexed record)
+        :single-record (hash-set indexed record)))))
+
+(defn- index-delete [index on-fn record]
+  (let [aval    (on-fn record)
+        indexed (aval index)]
+    (update index aval
       (fn [indexed]
         (cond
-          (nil? indexed) record
-          (set? indexed) (conj indexed record)
-          :single-record (hash-set indexed record))))))
+          (nil? indexed) (raise "missing record")
+          (set? indexed) (do
+                           (assert (contains? indexed record))
+                           (disj indexed record))
+          :single-record (do (assert (= indexed record))
+                           nil))))))
 
-(defn- index-delete [index {:keys [on where]} record]
-  (if (and where (not ((where-pred where) record)))
-    index
-    (let [aval    (on record)
-          indexed (aval index)]
-      (update index aval
-        (fn [indexed]
-          (if (and (set? indexed) (> 1 (count indexed)))
-            (do
-              (assert (contains? indexed record))
-              (disj indexed record))
-            (do
-              (assert (= #{record} indexed))
-              nil)))))))
-
-(defn- index-build [records spec]
-  (reduce
-    (fn [int-index record] (index-insert int-index spec record))
-    (sorted-map)
-    records))
-
-(defn- index-flatten1 [indexed]
-  (if (and indexed (not (set? indexed)))
-    (list indexed)))
-
-(defn- index-flatten [indexeds]
-  (lazy-seq
-    (when-let [iseq (seq indexeds)]
-      (let [f (first iseq) r (rest iseq)]
-        (cond
-          (nil? f) r
-          (set? f) (concat f r)
-          :single  (cons f r))))))
+(defn- index-build [records ispec]
+  (let [on-fn (ispec-on-fn ispec)]
+    (reduce
+      (fn [i r] (index-insert i on-fn r))
+      (sorted-map-by (attr-compare ispec))
+      records)))
 
 (defn- imap-apply [imap apply-fn]
-  (reduce
-    (fn [int-imap [spec index]]
-      (assoc int-imap (apply-fn spec index)))
-    {}
-    imap))
+  (mash (fn [ispec index] (apply-fn (ispec-on-fn ispec) index)) imap))
 
 (defn- imap-insert [imap record]
   (imap-apply imap
-    (fn [spec index]
-      (index-insert index spec record))))
+    (fn [on-fn index]
+      (index-insert index on-fn record))))
 
 (defn- imap-update [imap old-record new-record]
   (imap-apply imap
-    (fn [spec index]
+    (fn [on-fn index]
       (-> index
-        (index-delete spec old-record)
-        (index-insert spec new-record)))))
+        (index-delete on-fn old-record)
+        (index-insert on-fn new-record)))))
 
 (defn- imap-delete [imap record]
   (imap-apply imap
-    (fn [spec index] (index-delete index spec record))))
+    (fn [on-fn index] (index-delete index on-fn record))))
 
-(defn- root-plan [db [attr dir :as order]]
-  (cond
-    (= attr :id)
-      {:action  :rmap-scan
-       :dir     dir
-       :ordered true}
-    (and order (index-get db {:on attr}))
-      {:action  :index-scan
-       :attr    attr
-       :dir     dir
-       :ordered true}
-    :no-index
-      {:action  :db-scan
-       :ordered false}))
 
-(defn- filter-plan [source where]
-  (if-not where
-    source
-    {:action  :filter
-     :where   where
-     :ordered (:ordered source)
-     :source  source}))
+;; Query implementations
 
-(defn- root-filter-plan [db where order]
-  (-> (root-plan db order) (filter-plan where)))
+(defmulti query (fn [db [query-type opts]] query-type))
 
-(def- range-op?
-  #{:< :<= :> :>= :>< :>=< :><= :>=<=})
+(defmethod query :default [_ [query-type _]]
+  (raise (str "invalid query type: " query-type)))
 
-(defn- where-plan [db where order]
-  (let [[op & wrest] where]
-    (cond
-      ; only choice -> optimal
-      (not op)
-        (root-plan db order)
-
-      ; only simple choice -> probably optimal
-      (= :!= op)
-        (root-filter-plan db where order)
-
-      ; when no index, use root-filter-plan -> optimal
-      ; when reasonable index and no order -> probably optimal
-      ; when reasonable index and order -> may be suboptimal, but reasonable
-      (= := op)
-        (let [[attr aval] wrest]
-          (cond
-            (= attr :id)
-              {:action  :rmap-lookup
-               :id      aval
-               :ordered false}
-            (index-get db {:on attr})
-              {:action  :index-lookup
-               :attr    attr
-               :aval    aval
-               :ordered false}
-            :no-index
-              (root-filter-plan db where order)))
-
-      ; as above
-      (= :in op)
-        (let [[attr in] wrest]
-          (cond
-            (= attr :id)
-              {:action  :rmap-multilookup
-               :ids     in
-               :ordered false}
-            (index-get db {:on attr})
-              {:action  :index-multilookup
-               :attr    attr
-               :in      in
-               :ordered false}
-            :no-index
-              (root-filter-plan db where order)))
-
-      ; hmm
-      (range-op? op)
-        (let [[attr aval] wrest]
-          (cond
-            (= attr :id)
-              (let [[oattr odir] order
-                    ordered      (= :id oattr)]
-                {:action  :rmap-range
-                 :dir     (if ordered oattr)
-                 :op      op
-                 :idval   aval
-                 :ordered ordered})
-            (index-get db {:on attr})
-              (let [[oattr odir] order
-                    ordered      (= attr oattr)]
-                {:action  :index-range
-                 :attr    attr
-                 :dir     (if ordered oattr)
-                 :op      op
-                 :aval    aval
-                 :ordered ordered})
-            :no-index
-              (root-filter-plan db where order)))
-
-      ; when no indexes use root-filter-plan -> optimal
-      ; when some reasonable, most selective first index -> probably optimal
-      ; when non-index or not-most selective first -> suboptimal
-      (= :and op)
-        (let [main-plan     (where-plan db (first wrest) order)
-              filter-wheres (next wrest)]
-          {:action  :filter
-           :where   (cons :and filter-wheres)
-           :ordered (:ordered main-plan)
-           :source  main-plan})
-
-      ; meh -> fair but not great
-      (= :or op)
-        (let [sub-plans (map #(where-plan db % order) wrest)]
-          {:action  :union
-           :ordered false
-           :source  sub-plans})
-
-      :else
-        (raise (str "where op " op " not recognized")))))
-
-(defn- order-plan [source order]
-  (if (or (not order) (:ordered source))
-    source
-    {:action  :sort
-     :order   order
-     :ordered true
-     :source  source}))
-
-(defn- offset-plan [source offset]
-  (if-not offset
-    source
-    {:action  :offset
-     :offset  offset
-     :ordered (:ordered source)
-     :source  source}))
-
-(defn- limit-plan [source limit]
-  (if-not limit
-    source
-    {:action  :limit
-     :limit   limit
-     :ordered (:ordered source)
-     :source  source}))
-
-(defn- only-plan [source only]
-  (if-not only
-    source
-    {:action  :only
-     :only    only
-     :ordered (:ordered source)
-     :source  source}))
-
-(defn- find-plan [db where order offset limit only]
-  (-> (where-plan db where order)
-    (order-plan order)
-    (offset-plan offset)
-    (limit-plan limit)
-    (only-plan only)))
-
-(defmulti- exec (fn [db plan] (:action plan)))
-
-(defmethod exec :db-scan [{:keys [rmap]} plan]
-  (vals rmap))
-
-(defmethod exec :rmap-scan [{:keys [rmap]} {:keys [dir]}]
-  (let [seq-fn (if (= dir :asc) seq rseq)]
-    (map val (seq-fn rmap))))
-
-(defmethod exec :index-scan [db {:keys [attr dir]}]
-  (let [index    (index-get db {:on attr})
-        seq-fn   (if (= dir :asc) seq rseq)
-        pairs    (seq-fn index)
-        indexeds (map val pairs)]
-    (index-flatten indexeds)))
-
-(defmethod exec :index-lookup [db {:keys [attr aval]}]
-  (let [index   (index-get db {:on attr})
-        indexed (index aval)]
-    (index-flatten1 indexed)))
-
-(defmethod exec :rmap-lookup [{:keys [rmap]} {:keys [id]}]
-  (get rmap id))
-
-(defmethod exec :index-multilookup [db {:keys [attr in]}]
-  (let [index    (index-get db {:on attr})
-        indexeds (map index in)]
-    (index-flatten indexeds)))
-
-(defmethod exec :rmap-multilookup [{:keys [rmap]} {:keys [ids]}]
-  (map rmap ids))
-
-(def- one-sided-op-fns
-  {:< < :<= <= :> > :>= >=})
-
-(def- two-sided-op-fns
-  {:>< [> <] :>=< [>= <] :><= [> <=] :>=<= [>= <=]})
-
-(defn- index-range [index dir op ival]
-  (let [subseq-fn (if (= dir :asc) subseq rsubseq)
-        pairs     (if-let [op-fn (one-sided-op-fns op)]
-                    (subseq-fn index op-fn ival)
-                    (let [[op-fn1 op-fn2] (two-sided-op-fns op)
-                          [ival1  ival2]  ival]
-                      (subseq-fn index op-fn1 ival1 op-fn2 ival2)))]
-    (map val pairs)))
-
-(defmethod exec :index-range [db {:keys [attr dir op aval]}]
-  (let [index (index-get db {:on attr})]
-    (index-flatten (index-range index dir op aval))))
-
-(defmethod exec :rmap-range [{:keys [rmap]} {:keys [dir op idval]}]
-  (index-range rmap dir op idval))
-
-(defmethod exec :union [db {:keys [source]}]
-  (union-stream (map #(exec db %) source)))
-
-(defmethod exec :filter [db {:keys [where source]}]
-  (filter (where-pred where) (exec db source)))
-
-(defmethod exec :sort [db {:keys [order source]}]
-  (sort (order-keyfn order) (exec db source)))
-
-(defmethod exec :offset [db {:keys [offset source]}]
-  (drop offset (exec db source)))
-
-(defmethod exec :limit [db {:keys [limit source]}]
-  (take limit (exec db source)))
-
-(defmethod exec :only [db {:keys [only source]}]
-  (map #(select-keys % only) (exec db source)))
-
-(defn- find-records [db {:keys [where order offset limit only]}]
-  (exec db
-    (find-plan db where order offset limit only)))
-
-(defn- q-select [db opts]
+(defmethod query :select [db [_ opts]]
   (find-records db opts))
 
-(defn- q-count [db opts]
+(defmethod query :count [db [_ opts]]
   (count (find-records db opts)))
 
-(defn- db-apply [db records apply-fn]
-  (let [{old-rmap :rmap old-imap :imap} db
-        [new-rmap new-imap] (reduce apply-fn [old-rmap old-imap] records)]
+(defn- db-apply [{old-rmap :rmap old-imap :imap :as db} records apply-fn]
+  (let [[new-rmap new-imap] (reduce apply-fn [old-rmap old-imap] records)]
     [(assoc db :rmap new-rmap :imap new-imap) (count records)]))
 
-(defn- q-insert [db {:keys [records]}]
+(defmethod query :insert [db [_ {:keys [records]}]]
   (assert records)
   (db-apply db records
     (fn [[int-rmap int-imap] record]
       [(rmap-insert int-rmap record)
        (imap-insert int-imap record)])))
 
-(defn- q-update [db {:keys [with] :as opts}]
+(defmethod query :update [db [_ {:keys [with] :as opts}]]
   (assert with)
-    (db-apply db (find-records db opts)
-      (fn [[int-rmap int-imap] old-record]
-        (let [new-record (merge-compact old-record with)]
-          [(rmap-update int-rmap old-record new-record)
-           (imap-update int-imap old-record new-record)]))))
+  (db-apply db (find-records db opts)
+    (fn [[int-rmap int-imap] old-record]
+      (let [new-record (merge-compact old-record with)]
+        [(rmap-update int-rmap old-record new-record)
+         (imap-update int-imap old-record new-record)]))))
 
-(defn- q-delete [db opts]
+(defmethod query :delete [db [_ opts]]
   (db-apply db (find-records db opts)
     (fn [[int-rmap int-imap] old-record]
       [(rmap-delete int-rmap old-record)
        (imap-delete int-imap old-record)])))
 
-(defn- q-explain [db {[query-type opts] :query}]
+(defmethod query :explain [db [_ {[query-type opts] :query}]]
   (assert (= query-type :select))
   (let [{:keys [where order offset limit only]} opts]
     (find-plan db where order offset limit only)))
 
-(defn- q-create-index [db spec]
-  (assert (not (index-get db spec)))
-  (let [records (vals (:rmap db))
-        index   (index-build records spec)]
-    [(update db :imap assoc spec index) 1]))
+(defmethod query :create-index [db [_ {ispec :on}]]
+  (if (get-in db [:imap ispec])
+    [db 0]
+    (let [records (vals (:rmap db))
+          index   (index-build records ispec)]
+      [(update db :imap assoc ispec index) 1])))
 
-(defn- q-drop-index [db spec]
-  (let [index (index-get db spec)]
-    (assert index)
-    [(update db :imap dissoc spec) 1]))
+(defmethod query :drop-index [db [_ {ispec :on}]]
+  (if (get-in db [:imap ispec])
+    [db 0]
+    [(update db :imap dissoc ispec) 1]))
 
-(defn- q-list-indexes [db opts]
+(defmethod query :list-indexes [db [_ _]]
   (keys (:imap db)))
 
-(declare query)
-
-(defn- q-multi-read [db {:keys [queries]}]
+(defmethod query :multi-read [db [_ {:keys [queries]}]]
+  (assert queries)
   (vec (map #(query db %) queries)))
 
-(defn- q-multi-write [db {:keys [queries]}]
+(defmethod query :multi-write [db [_ {:keys [queries]}]]
+  (assert queries)
   (reduce
     (fn [[int-db int-results] q]
       (let [[aug-db result] (query int-db query)]
@@ -438,25 +510,10 @@
     [db []]
     queries))
 
-(defn- q-checked-write [db {:keys [check expect write]}]
+(defmethod query :checked-write [db [_ {:keys [check expect write]}]]
   (if (= (query db check) expect)
     (query db write)))
 
-(def- query-fns
-  {:select        q-select
-   :count         q-count
-   :insert        q-insert
-   :update        q-update
-   :delete        q-delete
-   :explain       q-explain
-   :create-index  q-create-index
-   :drop-index    q-drop-index
-   :list-indexes  q-list-indexes
-   :multi-read    q-multi-read
-   :multi-write   q-multi-write
-   :checked-write q-checked-write})
-
-(defn query [db [query-type opts]]
-  (if-let [queryfn (query-fns query-type)]
-    (queryfn db opts)
-    (raise (str "query type " query-type " not recognized"))))
+(defn init []
+  {:rmap (sorted-map)
+   :imap {}})
