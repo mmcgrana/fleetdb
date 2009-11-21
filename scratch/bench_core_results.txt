@@ -1,0 +1,16 @@
+n = 1000000
+k = 100
+
+bulk build:            3.163304
+chuncked build:        3.51901
+1-by-1 build:          5.267923
+offline index:         12.108816
+online bulk index:     12.455601  
+online chuncked index: 12.74158
+online 1-by-1 index:   15.408553
+get sequential:        2.068786
+get roundrobin:        4.095919
+multiget sequential:   12.7194    
+multiget roundrobin:   14.844117  
+query at:              16.966917  
+query range:           24.88157   

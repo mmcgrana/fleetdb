@@ -1,0 +1,54 @@
+storage prices: managed $/GB-month
+
+ec2 ram:       40
+softlayer ram: 30-40
+softlayer 15k: 1-2
+softlayer ssd: 4-15
+
+
+1   mil records * 100   bytes = .1   GB
+10  mil records * 100   bytes = 1    GB
+100 mil records * 100   bytes = 10   GB
+1   mil records * 1000  bytes = 1    GB
+10  mil records * 1000  bytes = 10   GB
+100 mil records * 1000  bytes = 100  GB
+1   mil records * 10000 bytes = 10   GB
+10  mil records * 10000 bytes = 100  GB
+100 mil records * 10000 bytes = 1000 GB
+
+1  node  * 1 core * 4  GB  =  4    GB = 200   $/m ~ dev server limit
+1  node  * 4 core * 8  GB  =  32   GB = 1300  $/m
+1  node  * 8 core * 16 GB  =  128  GB = 3000  $/m ~ commodity hw / 1 developer limit
+8  node  * 4 core * 8  GB  =  256  GB = 8000  $/m
+
+1  core * 10 k records/second * 1    seconds = 10  k   records
+1  core * 10 k records/second * 10   seconds = 100 k   records
+1  core * 10 k records/second * 100  seconds = 1   mil records ~ dev server limit
+1  core * 10 k records/second * 1000 seconds = 10  mil records (10GB) ~ 1 core limit
+10 core * 10 k records/second * 10   seconds = 1   mil records
+10 core * 10 k records/second * 100  seconds = 10  mil records
+10 core * 10 k records/second * 1000 seconds = 100 mil records
+
+
+simple max: 1 node, 8 cores, 16GB ram, 10 mil records, 1000 bytes, 10GB storage, 1000 second load time
+complex max: 4 node, 16 site, 32 cores, 128GB ram, 100 mil records, 100 bytes, 100GB storage, 1000 second load time
+
+for < 100 second load: 1GB / core @ 10k records / second
+for < 100 second load: 4GB / core @ 40k records / second
+
+10 k 1000k records / second = 10 MB / second -> only need one disk for ~10 cores
+
+after hitting 1000 second wall for 10 mil records, may be easier to engineer
+2-layer hierarchy that uses fast ssd drives, especially given limited interface
+200GB of solid state drive increases price of 128GB server by 10%.
+May be able to get away with paging to high performance flash drive.
+
+find ways to maximize 1 node load speed
+  dump and load all tables and indices separately in different threads, merge trivially
+  nice for tables, but key for indices, dump/load time O(1) wrt number of indicies 
+  redo log still in simple format to ensure consistency
+  dumping is cheap: even if it takes a few hours on 1 core no big deal
+
+goal: push capacity towards 100 mil records, at which point we argue it makes
+sense to switch to a less add-hoc query model at least for least relational data,
+i.e. map-reduce based, which makes much more sense to implemen on SSD,

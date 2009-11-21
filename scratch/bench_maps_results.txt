@@ -1,0 +1,30 @@
+n = 2000000
+
+seq
+memory usage (MB): 766
+build time (sec):  6.237622
+
+hashmap
+memory usage (MB): 950
+build time (sec):  7.119948
+query time (sec):  1.636947
+
+treemap
+memory usage (MB): 875
+build time (sec):  8.00747
+query time (sec):  1.395674
+
+map
+memory usage (MB): 880
+build time (sec):  14.954908
+query time (sec):  1.526008
+
+transmap
+memory usage (MB): 0
+build time (sec):  3.722647
+query time (sec):  0.694251
+
+sortedmap
+memory usage (MB): 1024
+build time (sec):  11.90116
+query time (sec):  1.153521

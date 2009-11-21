@@ -1,0 +1,41 @@
+notes
+  keep records, record with sha1s  
+
+targets
+  fleetdb
+  postgresql
+  drizzle
+  h2
+  mongodb
+  couchdb
+  redis
+  memcached
+
+data "sizes"
+  50 MB
+  500 MB
+  5 GB
+
+considerations
+  {sequential primary key
+   random primary key}
+  {insert
+   read
+   insert read
+   mass-update read}
+  {single thread
+   many reader threads
+   many reader, many writer threads}
+  {magnetic platers
+   SSD}
+
+machine specs
+  development
+    laptop
+    dover
+  final clean
+    8 GB ram
+    4 cores
+    75 GB 15k disk
+    32 GB SSD disk
+    $425 / month
