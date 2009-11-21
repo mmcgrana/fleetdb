@@ -3,6 +3,7 @@ package fleetdb;
 import java.io.DataOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.EOFException;
 
 import clojure.lang.ISeq;
 import clojure.lang.IPersistentMap;
@@ -12,7 +13,7 @@ import clojure.lang.LazilyPersistentVector;
 import clojure.lang.Keyword;
 import clojure.lang.RT;
 
-public class Serializer {  
+public class Serializer {
   private static final byte MAP_TYPE =     0;
   private static final byte VECTOR_TYPE =  1;
   private static final byte KEYWORD_TYPE = 2;
@@ -45,7 +46,7 @@ public class Serializer {
         serialize(dos, vSeq.first());
         vSeq = vSeq.next();
       }
-      
+
     } else if (obj instanceof Keyword) {
       dos.writeByte(KEYWORD_TYPE);
       Keyword kw = (Keyword) obj;
@@ -53,7 +54,7 @@ public class Serializer {
       int byteSize = bytes.length;
       dos.writeInt(byteSize);
       dos.write(bytes, 0, byteSize);
-      
+
     } else if (obj instanceof String) {
       dos.writeByte(STRING_TYPE);
       String str = (String) obj;
@@ -61,23 +62,23 @@ public class Serializer {
       int byteSize = bytes.length;
       dos.writeInt(byteSize);
       dos.write(bytes, 0, byteSize);
-      
+
     } else if (obj instanceof Integer) {
       dos.writeByte(INTEGER_TYPE);
       dos.writeInt((Integer) obj);
-      
+
     } else if (obj instanceof Long) {
       dos.writeByte(LONG_TYPE);
       dos.writeLong((Long) obj);
-      
+
     } else if (obj instanceof Double) {
       dos.writeByte(DOUBLE_TYPE);
       dos.writeDouble((Double) obj);
-      
+
     } else if (obj instanceof Boolean) {
       dos.writeByte(BOOLEAN_TYPE);
       dos.writeBoolean((Boolean) obj);
-    
+
     } else if (obj == null) {
       dos.writeByte(NIL_TYPE);
 
@@ -85,11 +86,9 @@ public class Serializer {
       throw new Exception("Can not serialize " + obj);
     }
   }
-  
+
   public static Object deserialize(DataInputStream dis, Object eofValue) throws Exception {
-    if (dis.available() == 0) {
-      return eofValue;
-    } else {
+    try {
       byte typeByte = dis.readByte();
       switch (typeByte) {
         case MAP_TYPE:
@@ -138,6 +137,8 @@ public class Serializer {
         default:
           throw new Exception("Can not deserialize " + typeByte);
       }
-    } 
+    } catch (EOFException e) {
+      return eofValue;
+    }
   }
 }
