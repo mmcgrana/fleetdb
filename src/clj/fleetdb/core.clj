@@ -352,16 +352,16 @@
                         base
                         (rest base))
               base-lr (if right-inc
-                        (take-while #(<= 0 (compare* (key %) right-val)) base-l)
-                        (take-while #(<  0 (compare* (key %) right-val)) base-l))]
+                        (take-while #(<= (compare* (key %) right-val) 0) base-l)
+                        (take-while #(<  (compare* (key %) right-val) 0) base-l))]
           (vals base-lr))
         (let [base    (.seqFrom index right-val false)
               base-r  (if (or right-inc (!= (key (first base)) right-val))
                         base
                         (rest base))
               base-rl (if left-inc
-                        (take-while #(>= 0 (compare* (key %) left-val)) base-r)
-                        (take-while #(>  0 (compare* (key %) left-val)) base-r))]
+                        (take-while #(>= (compare* (key %) left-val) 0) base-r)
+                        (take-while #(>  (compare* (key %) left-val) 0) base-r))]
           (vals base-rl)))]
       (indexed-flatten indexeds)))
 
@@ -480,7 +480,7 @@
 (defmethod query :explain [db [_ {[query-type opts] :query}]]
   (assert (= query-type :select))
   (let [{:keys [where order offset limit only]} opts]
-    (find-plan db where order offset limit only)))
+    (find-plan (keys (:imap db)) where order offset limit only)))
 
 (defmethod query :create-index [db [_ {ispec :on}]]
   (if (get-in db [:imap ispec])
