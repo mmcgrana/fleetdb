@@ -1,12 +1,10 @@
 (set! *warn-on-reflection* true)
 
 (import
-  '(fleetdb Serializer)
-  '(com.yourkit.api Controller ProfilingModes)
-  '(java.io File FileOutputStream BufferedOutputStream DataOutputStream
-                 FileInputStream  BufferedInputStream  DataInputStream))
+  '(com.yourkit.api Controller ProfilingModes))
 
 (use
+  '(fleetdb serializer)
   '(clojure.contrib shell-out))
 
 (defn profile [body]
@@ -34,31 +32,6 @@
         t-end   (nano-time)]
    [res (double (/ (- t-end t-start) 1000000000))]))
 
-(defn dos-init [#^String dos-path]
-  (let [dos-file (File. dos-path)]
-    (assert (.createNewFile dos-file))
-    (DataOutputStream. (BufferedOutputStream. (FileOutputStream. dos-path)))))
-
-(defn dos-write [#^DataOutputStream dos obj]
-  (Serializer/serialize dos obj)
-  (.flush dos))
-
-(defn dos-close [#^DataOutputStream dos]
-  (.close dos))
-
-(defn dis-init [#^String dis-path]
-  (let [dis-file (File. dis-path)]
-    (assert (.exists dis-file))
-    (DataInputStream. (BufferedInputStream. (FileInputStream. dis-path)))))
-
-(defn dis-read [dis eof-val]
-  (Serializer/deserialize dis eof-val))
-
-(defn dis-close [#^DataInputStream dis]
-  (.close dis))
-
-(def eof (Object.))
-
 (defn records [n]
   (for [x (range n)]
     {:id         (+ x 10000000)
@@ -66,8 +39,8 @@
      :updated_at (+ x 30000000)
      :title      (str x "is the best number ever")}))
 
-(def n 10)
-(def k 1)
+(def n 1000000)
+(def k 100)
 (defn one-path [i] (str "/Users/mmcgrana/Desktop/one." i))
 (defn chk-path [i] (str "/Users/mmcgrana/Desktop/chk." i))
 

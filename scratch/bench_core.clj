@@ -52,60 +52,59 @@
 (println "k =" k)
 (println)
 
-; (println "bulk build:           "
-;   (build-time n (list (records n))))
-; 
-; (println "chuncked build:       "
-;   (build-time n (partition k (records n))))
-; 
-; (println "1-by-1 build:         "
-;   (build-time n (partition 1 (records n))))
-; 
-; (println "offline index:        "
-;   (second (timed
-;     #(query
-;        (first (query (init) [:insert {:records (records n)}]))
-;        [:create-index {:on [[:created-at :asc]]}]))))
+(println "bulk build:           "
+  (build-time n (list (records n)) false))
+
+(println "chuncked build:       "
+  (build-time n (partition k (records n)) false))
+
+(println "1-by-1 build:         "
+  (build-time n (partition 1 (records n)) false))
+
+(println "offline index:        "
+  (second (timed
+    #(query
+       (first (query (init) [:insert {:records (records n)}]))
+       [:create-index {:on [[:created-at :asc]]}]))))
 
 (let [indexed (first (query (init) [:create-index {:on [[:created-at :asc]]}]))]
-  ; (println "online bulk index:    "
-  ;   (build-time n (list (records n)) indexed))
+  (println "online bulk index:    "
+    (build-time n (list (records n)) false indexed))
 
    (println "online chuncked index:"
-     (build-time n (partition k (records n)) false indexed)))
-; 
-;   (println "online 1-by-1 index:  "
-;     (build-time n (partition 1 (records n)) indexed)))
-; 
-;(let [inserted (first (query (init) [:insert {:records (records n)}]))
-;      built    (first (query inserted [:create-index {:on [[:created-at :asc]]}]))]
-;  (println "get sequential:       "
-;    (second (timed
-;      #(doseq [id (range n)]
-;         (doall (query built [:select {:where [:= :id id]}]))))))
-;  
-;  (println "get roundrobin:       "
-;    (second (timed
-;      #(doseq [id (take n (cycle (iterate (partial + 100) 0)))]
-;         (doall (query built [:select {:where [:= :id id]}]))))))
-;  
-;  (println "multiget sequential:  "
-;    (second (timed
-;      #(doseq [id (range n)]
-;         (doall (query built [:select {:where [:in :id (take 10 (iterate inc id))]}]))))))
-;  
-;  (println "multiget roundrobin:  "
-;    (second (timed
-;      #(doseq [id (range n)]
-;         (doall (query built [:select {:where [:in :id (take 10 (iterate (partial + 100) id))]}]))))))
-;  
-;   (println "query at:             "
-;     (second (timed
-;       #(doseq [id (range n)]
-;          (doall (query built [:select {:where [:= :created-at (+ 20000000 id)]}])))))))
-;   
-;  (println "query range:          "
-;    (second (timed
-;      #(doseq [id (range n)]
-;         (doall (query built [:select {:where [:>=<= :created-at [(+ 20000000 id) (+ 20000000 id 10)]]}])))))))
-;  
+     (build-time n (partition k (records n)) false indexed))
+
+  (println "online 1-by-1 index:  "
+    (build-time n (partition 1 (records n)) false indexed)))
+
+(let [inserted (first (query (init) [:insert {:records (records n)}]))
+      built    (first (query inserted [:create-index {:on [[:created-at :asc]]}]))]
+  (println "get sequential:       "
+    (second (timed
+      #(doseq [id (range n)]
+         (doall (query built [:select {:where [:= :id id]}]))))))
+
+  (println "get roundrobin:       "
+    (second (timed
+      #(doseq [id (take n (cycle (iterate (partial + 100) 0)))]
+         (doall (query built [:select {:where [:= :id id]}]))))))
+
+  (println "multiget sequential:  "
+    (second (timed
+      #(doseq [id (range n)]
+         (doall (query built [:select {:where [:in :id (take 10 (iterate inc id))]}]))))))
+
+  (println "multiget roundrobin:  "
+    (second (timed
+      #(doseq [id (range n)]
+         (doall (query built [:select {:where [:in :id (take 10 (iterate (partial + 100) id))]}]))))))
+
+   (println "query at:             "
+     (second (timed
+       #(doseq [id (range n)]
+          (doall (query built [:select {:where [:= :created-at (+ 20000000 id)]}]))))))
+
+  (println "query range:          "
+    (second (timed
+      #(doseq [id (range n)]
+         (doall (query built [:select {:where [:>=<= :created-at [(+ 20000000 id) (+ 20000000 id 10)]]}])))))))

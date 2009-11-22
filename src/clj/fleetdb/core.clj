@@ -1,5 +1,5 @@
 (ns fleetdb.core
-  (:import (clojure.lang Numbers Sorted))
+  (:import (clojure.lang Numbers Sorted) (fleetdb Compare))
   (:use (fleetdb util)))
 
 ;; General ordering
@@ -7,39 +7,22 @@
 (def- neg-inf :neg-inf)
 (def- pos-inf :pos-inf)
 
-(defn- compare* [a b]
-  (cond
-    (identical? a b)
-      0
-    (or (identical? a neg-inf) (identical? b pos-inf))
-      -1
-    (or (identical? a pos-inf) (identical? b neg-inf))
-      1
-    (nil? a)
-      -1
-    (nil? b)
-      1
-    (number? a)
-      (Numbers/compare a b)
-    :else
-      (.compareTo #^Comparable a #^Comparable b)))
-
 (defn- record-compare [order]
   (let [[[attr dir] & rorder] order]
     (if (not rorder)
       (cond
         (= dir :asc)
-          #(compare* (attr %1) (attr %2))
+          #(Compare/compare (attr %1) (attr %2))
         (= dir :dsc)
-          #(compare* (attr %2) (attr %1))
+          #(Compare/compare (attr %2) (attr %1))
         :else
           (raise ("invalid order " order)))
       (let [rcompare (record-compare rorder)]
         (cond
           (= dir :asc)
-            #(let [c (compare* (attr %1) (attr %2))] (if (zero? c) (rcompare %1 %2) c))
+            #(let [c (Compare/compare (attr %1) (attr %2))] (if (zero? c) (rcompare %1 %2) c))
           (= dir :dsc)
-            #(let [c (compare* (attr %2) (attr %1))] (if (zero? c) (rcompare %1 %2) c))
+            #(let [c (Compare/compare (attr %2) (attr %1))] (if (zero? c) (rcompare %1 %2) c))
           :else
             (raise "invalid order " order))))))
 
@@ -48,20 +31,20 @@
     (if (not rorder)
       (cond
         (= dir :asc)
-          #(compare* %1 %2)
+          #(Compare/compare %1 %2)
         (= dir :dsc)
-          #(compare* %2 %1)
+          #(Compare/compare %2 %1)
         :else
           (raise (str "invalid order " order)))
       (let [rcompare (attr-compare rorder)]
         (cond
           (= dir :asc)
-            #(let [c (compare* (first %1) (first %2))]
+            #(let [c (Compare/compare (first %1) (first %2))]
                (if (zero? c)
                  (rcompare (rest %1) (rest %2))
                  c))
           (= dir :dsc)
-            #(let [c (compare* (first %1) (first %2))]
+            #(let [c (Compare/compare (first %1) (first %2))]
                (if (zero? c)
                  (rcompare (rest %1) (rest %2))
                    c))
@@ -352,16 +335,16 @@
                         base
                         (rest base))
               base-lr (if right-inc
-                        (take-while #(<= (compare* (key %) right-val) 0) base-l)
-                        (take-while #(<  (compare* (key %) right-val) 0) base-l))]
+                        (take-while #(<= (Compare/compare (key %) right-val) 0) base-l)
+                        (take-while #(<  (Compare/compare (key %) right-val) 0) base-l))]
           (vals base-lr))
         (let [base    (.seqFrom index right-val false)
               base-r  (if (or right-inc (!= (key (first base)) right-val))
                         base
                         (rest base))
               base-rl (if left-inc
-                        (take-while #(>= (compare* (key %) left-val) 0) base-r)
-                        (take-while #(>  (compare* (key %) left-val) 0) base-r))]
+                        (take-while #(>= (Compare/compare (key %) left-val) 0) base-r)
+                        (take-while #(>  (Compare/compare (key %) left-val) 0) base-r))]
           (vals base-rl)))]
       (indexed-flatten indexeds)))
 

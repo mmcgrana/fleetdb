@@ -1,20 +1,8 @@
 (set! *warn-on-reflection* true)
 
-(import
-  '(fleetdb Serializer)
-  '(java.io ByteArrayOutputStream DataOutputStream
-            ByteArrayInputStream  DataInputStream))
+(use '(fleetdb serializer))
 
-(defn serialize [obj]
-  (let [baos (ByteArrayOutputStream.)
-        dos  (DataOutputStream. baos)]
-    (Serializer/serialize dos obj)
-    (.toByteArray baos)))
-
-(defn deserialize [bytes eof]
-  (let [bais  (ByteArrayInputStream. bytes)
-        dis   (DataInputStream. bais)]
-    (Serializer/deserialize dis eof)))
+(import '(fleetdb Serializer)
 
 (defn wall-time [f]
   (let [start  (System/nanoTime)

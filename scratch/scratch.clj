@@ -300,3 +300,34 @@
 
       [[:age :dsc]] {:where [:>=< :age [21 30]]}
       [_ :right-left 30 false 21 true]
+
+ public static int numCompare(Number a, Number b) {
+    if (a == b) {
+      return 0;
+    } else {
+      return Numbers.compare(a, b);
+    }
+  }
+
+  static public final Comparator NUM_COMPARATOR = new Comparator() {
+  	public int compare(Object a, Object b){
+  	  return Numbers.compare((Number) a, (Number) b);
+  	}
+  };
+  
+  // (defn- compare* [a b]
+  //   (cond
+  //     (identical? a b)
+  //       0
+  //     (or (identical? a neg-inf) (identical? b pos-inf))
+  //       -1
+  //     (or (identical? a pos-inf) (identical? b neg-inf))
+  //       1
+  //     (nil? a)
+  //       -1
+  //     (nil? b)
+  //       1
+  //     (number? a)
+  //       (Numbers/compare a b)
+  //     :else
+  //       (.compareTo #^Comparable a #^Comparable b)))

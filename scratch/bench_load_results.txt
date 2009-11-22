@@ -1,0 +1,11 @@
+n = 1000000
+k = 100
+
+unindexed chunked simple load:  9.717658
+indexed chunked simple load:    16.344681
+unindexed chunked seq'ed load:  8.667676
+indexed chunked seq'ed load:    16.726101
+unindexed chunked seque'd load: 8.793164
+indexed chunked seque'd load:   13.891758
+unindexed chunked worker load:  7.922441
+indexed chunked worker load:    16.548462
