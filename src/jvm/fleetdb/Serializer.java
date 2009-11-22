@@ -4,7 +4,7 @@ import java.io.DataOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.EOFException;
-
+import java.math.BigInteger;
 import clojure.lang.ISeq;
 import clojure.lang.IPersistentMap;
 import clojure.lang.IMapEntry;
@@ -14,15 +14,16 @@ import clojure.lang.Keyword;
 import clojure.lang.RT;
 
 public class Serializer {
-  private static final byte MAP_TYPE =     0;
-  private static final byte VECTOR_TYPE =  1;
-  private static final byte KEYWORD_TYPE = 2;
-  private static final byte STRING_TYPE =  3;
-  private static final byte INTEGER_TYPE = 4;
-  private static final byte LONG_TYPE =    5;
-  private static final byte DOUBLE_TYPE =  6;
-  private static final byte BOOLEAN_TYPE = 7;
-  private static final byte NIL_TYPE =     8;
+  private static final byte MAP_TYPE =         0;
+  private static final byte VECTOR_TYPE =      1;
+  private static final byte KEYWORD_TYPE =     2;
+  private static final byte STRING_TYPE =      3;
+  private static final byte INTEGER_TYPE =     4;
+  private static final byte LONG_TYPE =        5;
+  private static final byte BIG_INTEGER_TYPE = 6;
+  private static final byte DOUBLE_TYPE =      7;
+  private static final byte BOOLEAN_TYPE =     8;
+  private static final byte NIL_TYPE =         9;
 
   public static void serialize(DataOutputStream dos, Object obj) throws Exception {
     if (obj instanceof IPersistentMap) {
@@ -70,6 +71,13 @@ public class Serializer {
     } else if (obj instanceof Long) {
       dos.writeByte(LONG_TYPE);
       dos.writeLong((Long) obj);
+
+    } else if (obj instanceof BigInteger) {
+      dos.writeByte(BIG_INTEGER_TYPE);
+      byte[] bytes = ((BigInteger) obj).toByteArray();
+      int byteSize = bytes.length;
+      dos.writeInt(byteSize);
+      dos.write(bytes, 0, byteSize);
 
     } else if (obj instanceof Double) {
       dos.writeByte(DOUBLE_TYPE);
@@ -125,6 +133,12 @@ public class Serializer {
         case LONG_TYPE:
           return dis.readLong();
         
+        case BIG_INTEGER_TYPE:
+          int byteSize = dis.readInt();
+          byte[] bytes = new byte[byteSize];
+          dis.read(bytes, 0, byteSize);
+          return new BigInteger(bytes);
+
         case DOUBLE_TYPE:
           return dis.readDouble();
 

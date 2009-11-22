@@ -94,18 +94,30 @@
 (query conn [:insert {:records records}])
 
 
+; Log writing
+open dos after database
+do nothing on read query
+write write and multi-write directly
+write :write of checked-write
+persistance can stay out of core, right? - just put in embedded
+
+; log reading
+
+open dis
+reduce database over query-seq
+then return database
+
 ; Todo
-uuids - serialization and core performance
+log writing
+log loading
+snapshoting
+forking
+recursive log loading
+log compacting
 embedded and server modes
 initializing
 stopping - ctr-c
 optional persistence
-log writing
-log loading
-log compacting
-recursive log loading
-snapshoting
-forking
 query statistics
 query profiling / response normalization
 replication

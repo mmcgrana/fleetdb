@@ -32,6 +32,13 @@
      :updated-at (+ x 30000000)
      :title      (str x "is the best number ever")}))
 
+(defn bigint-records [n]
+  (for [x (range n)]
+    {:id         (+ x 5787935876087761561957338577287896768)
+     :created-at (+ x 20000000)
+     :updated-at (+ x 30000000)
+     :title      (str x "is the best number ever")}))
+
 (def n 1000000)
 (def k 100)
 
@@ -52,8 +59,17 @@
 (println "k =" k)
 (println)
 
+(println "records:              "
+  (second (timed #(dorun (records n)))))
+
+(println "bigint records:       "
+  (second (timed #(dorun (bigint-records n)))))
+
 (println "bulk build:           "
   (build-time n (list (records n)) false))
+
+(println "bulk bigint build:    "
+  (build-time n (list (bigint-records n)) false))
 
 (println "chuncked build:       "
   (build-time n (partition k (records n)) false))
@@ -65,6 +81,12 @@
   (second (timed
     #(query
        (first (query (init) [:insert {:records (records n)}]))
+       [:create-index {:on [[:created-at :asc]]}]))))
+
+(println "offline bigint build: "
+  (second (timed
+    #(query
+       (first (query (init) [:insert {:records (bigint-records n)}]))
        [:create-index {:on [[:created-at :asc]]}]))))
 
 (let [indexed (first (query (init) [:create-index {:on [[:created-at :asc]]}]))]

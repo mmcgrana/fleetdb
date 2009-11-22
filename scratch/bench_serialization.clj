@@ -14,20 +14,34 @@
   (f)
   (println label (wall-time f)))
 
-(def object
+(def int-object
   {:id 1000 :created_at 1001 :updated_at 1002
    :author_id 1003 :version 1005 :posted_at 1006
    :title "3 is the best number ever"
    :slug "3-is-the-best-number-ever"
    :body "3 is the best number ever. I say so so its true. That is all."})
 
-(let [obj   object
-      eof   (Object.)
-      n     1000000
-      bytes (serialize obj)]
-  (println "n =" n)
-  (println)
-  (bench "serialize:  "
-    #(dotimes [_ n] (serialize obj)))
-  (bench "deserialize:"
-    #(dotimes [_ n] (deserialize bytes eof))))
+(def bigint-object
+  (assoc int-object
+    :id        33159784908718306650975755317368237673
+    :author_id 5787935876087761561957338577287896768))
+
+(def n 1000000)
+
+(println "n =" n)
+(println)
+
+(let [int-obj      int-object
+      bigint-obj   bigint-object
+      int-bytes    (serialize int-obj)
+      bigint-bytes (serialize bigint-obj)]
+
+  (bench "serialize int object:     "
+    #(dotimes [_ n] (serialize int-obj)))
+  (bench "deserialize int object:   "
+    #(dotimes [_ n] (deserialize int-bytes eof)))
+
+  (bench "serialize bigint object:  "
+    #(dotimes [_ n] (serialize bigint-obj)))
+  (bench "deserialize bigint object:"
+    #(dotimes [_ n] (deserialize bigint-bytes eof))))

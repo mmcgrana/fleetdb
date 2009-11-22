@@ -1,4 +1,6 @@
 n = 1000000
 
-serialize:   6.369012
-deserialize: 8.250611
+serialize int object:      6.069101
+deserialize int object:    8.851202
+serialize bigint object:   6.305985
+deserialize bigint object: 9.155805
