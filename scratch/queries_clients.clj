@@ -41,49 +41,12 @@
 => <query_plan>
 
 
-
-; Raw
-
-(def dba (atom (core/init)))
-(def executor (executors/init))
-
-(core/query @dba [:select {:where [:= :id id]}])
-
-(executor/execute executor
-  #(let [old-db @db
-         [new-db result] (core/query old-db [:insert {:records records}])]
-     (assert (compare-and-set! dba new-db old-db))
-     result))
-
-
-; Embedded
-
-(defn atomized [db] (atom db :meta {:executor (executors/init)}))
-
-(defn atomized? [dba] (:executor (meta dba)))
-
-(defn atomized-query [dba [query-type :as q]]
-  (assert (atomized? dba))
-  (if (read-query-type? query-type)
-    (core/query @dba q)
-    (executor/execute (:executor (meta dba))
-      #(let [old-db @dba
-             [new-db result] (core/query old-db [:insert {:records records}])]
-         (assert (compare-and-set! dba new-db old-db))
-         result))))
-
-(def dba (atomized (init)))
-
-(core/atomized-query dba [:select {:where [:= :id id]}])
-(core/atomized-query dba [:insert {:records records}])
-
-
 ; Server
 
-(def dba (atomized (init)))
+(def dba (embedded/init))
 
 (defn recieve [q]
-  (core/atomized-query dba q))
+  (embedded/query dba q))
 
 
 ; Client
@@ -93,6 +56,15 @@
 (query conn [:select {:where [:= :id id]}])
 (query conn [:insert {:records records}])
 
+; Embedded
+
+enter executor
+  get old db
+  comp result, new db
+  write to simplified query to log
+  swap new db in
+  return result
+exit executor
 
 ; Log writing
 open dos after database
@@ -108,6 +80,7 @@ reduce database over query-seq
 then return database
 
 ; Todo
+exceptions & interaction with threading
 log writing
 log loading
 snapshoting

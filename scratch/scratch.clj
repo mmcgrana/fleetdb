@@ -331,3 +331,6 @@
   //       (Numbers/compare a b)
   //     :else
   //       (.compareTo #^Comparable a #^Comparable b)))
+
+  (def read-query-type?
+    #{:select :count :explain :list-indexes :multi-read})

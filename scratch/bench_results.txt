@@ -1,0 +1,96 @@
+-- maps
+n = 2000000
+seq       memory usage: 766
+seq       build time:   6.249573
+hashmap   memory usage: 950
+hashmap   build time:   7.15861
+hashmap   query time:   1.611908
+treemap   memory usage: 875
+treemap   build time:   7.851961
+treemap   query time:   1.372497
+map       memory usage: 887
+map       build time:   14.843405
+map       query time:   1.505983
+transmap  memory usage: 0
+transmap  build time:   3.608012
+transmap  query time:   0.678332
+sortedmap memory usage: 1024
+sortedmap build time:   12.542146
+sortedmap query time:   1.193615
+
+-- ids
+n = 1000000
+gen random UUIDs:       4.327832
+Reflection warning, /Users/mmcgrana/remote/fleetdb/scratch/bench_ids.clj:30 - call to java.math.BigInteger ctor can't be resolved.
+gen random BigIntegers: 1.989771
+
+-- serialization
+n = 1000000
+serialize int object:      6.489187
+deserialize int object:    8.810374
+serialize bigint object:   6.575539
+deserialize bigint object: 9.191336
+
+-- io
+n =  1000000
+k =  100
+write 1-by-1:    8.40586
+write chuncked:  4.245295
+read 1-by-1:     3.863892
+read chuncked:   3.484888
+
+-- core
+n = 1000000
+k = 100
+records:               0.73767
+bigint records:        0.807189
+bulk build:            3.27282
+bulk bigint build:     6.157399
+chuncked build:        4.353414
+1-by-1 build:          6.17831
+offline index:         10.61365
+offline bigint build:  14.353752
+online bulk index:     11.752366
+online chuncked index: 11.118711
+online 1-by-1 index:   13.804525
+get sequential:        3.064593
+get roundrobin:        4.938637
+multiget sequential:   18.66599
+multiget roundrobin:   23.157735
+query at:              15.557335
+query range:           17.481632
+
+-- dump load
+n = 1000000
+k = 100
+chunked simple dump:            5.831495
+unindexed chunked simple load:  9.938675
+indexed chunked simple load:    15.773961
+unindexed chunked seq'ed load:  8.765637
+indexed chunked seq'ed load:    15.798844
+unindexed chunked seque'd load: 8.26718
+indexed chunked seque'd load:   13.405899
+unindexed chunked worker load:  8.750477
+indexed chunked worker load:    15.833736
+
+-- embedded
+n = 1000000
+1-by-1 build:   30.343123
+get sequential: 2.818346
+
+
+n = 1000000, unindexed
+
+chunked read  3.5
+chunked build 4.4
+chunked load  8.8 [.9]
+
+1-by-1 build    6.2
+em/1-by-1 build 30.3 [24.1]
+
+get seq    3.1
+em/get seq 2.8 [-0.3]
+
+
+
+

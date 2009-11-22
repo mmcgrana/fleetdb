@@ -32,6 +32,9 @@
      :updated-at (+ x 30000000)
      :title      (str x "is the best number ever")}))
 
+(defn record-ids [n]
+  (map #(+ 10000000 %) (range n)))
+
 (defn bigint-records [n]
   (for [x (range n)]
     {:id         (+ x 5787935876087761561957338577287896768)
@@ -55,9 +58,9 @@
         (assert (= n (query built [:count])))
         t))))
 
+(println "-- core")
 (println "n =" n)
 (println "k =" k)
-(println)
 
 (println "records:              "
   (second (timed #(dorun (records n)))))
@@ -103,7 +106,7 @@
       built    (first (query inserted [:create-index {:on [[:created-at :asc]]}]))]
   (println "get sequential:       "
     (second (timed
-      #(doseq [id (range n)]
+      #(doseq [id (record-ids n)]
          (doall (query built [:select {:where [:= :id id]}]))))))
 
   (println "get roundrobin:       "
@@ -113,20 +116,20 @@
 
   (println "multiget sequential:  "
     (second (timed
-      #(doseq [id (range n)]
+      #(doseq [id (record-ids n)]
          (doall (query built [:select {:where [:in :id (take 10 (iterate inc id))]}]))))))
 
   (println "multiget roundrobin:  "
     (second (timed
-      #(doseq [id (range n)]
+      #(doseq [id (record-ids n)]
          (doall (query built [:select {:where [:in :id (take 10 (iterate (partial + 100) id))]}]))))))
 
    (println "query at:             "
      (second (timed
-       #(doseq [id (range n)]
+       #(doseq [id (record-ids n)]
           (doall (query built [:select {:where [:= :created-at (+ 20000000 id)]}]))))))
 
   (println "query range:          "
     (second (timed
-      #(doseq [id (range n)]
+      #(doseq [id (record-ids n)]
          (doall (query built [:select {:where [:>=<= :created-at [(+ 20000000 id) (+ 20000000 id 10)]]}])))))))

@@ -1,6 +1,6 @@
 (set! *warn-on-reflection* true)
 
-(import '(java.util UUID))
+(import '(java.util UUID Random))
 
 (defn nano-time []
   (System/nanoTime))
@@ -14,13 +14,17 @@
 
 (def n 1000000)
 
-(defn uuids [n]
-  (for [_ (range n)]
-    (UUID/randomUUID)))
-
+(println "-- ids")
 (println "n =" n)
-(println)
 
-(println "gen random UUIDs:"
+(println "gen random UUIDs:      "
   (timed
-    #(dorun (uuids n))))
+    #(dotimes [_ n] (UUID/randomUUID))))
+
+(println "gen random BigIntegers:"
+  (let [r (Random.)]
+    (timed
+      #(dotimes [_ n]
+         (let [bytes (make-array Byte/TYPE 16)]
+           (.nextBytes r bytes)
+           (BigInteger. bytes))))))

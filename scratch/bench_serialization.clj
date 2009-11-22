@@ -28,8 +28,8 @@
 
 (def n 1000000)
 
+(println "-- serialization")
 (println "n =" n)
-(println)
 
 (let [int-obj      int-object
       bigint-obj   bigint-object

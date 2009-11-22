@@ -47,10 +47,6 @@
       (if-not (identical? elem eof-val)
         (cons elem (dis-seq dis eof-val))))))
 
-(println "n =" n)
-(println "k =" k)
-(println)
-
 (defn bench-simple-dump [label]
   (let [dos (dos-init log-path)
         db  (first (query (init) [:insert {:records (records n)}]))]
@@ -95,6 +91,10 @@
                (recur (first (query db-int q)))
                db-int)))))))
 
+(println "-- dump load")
+(println "n =" n)
+(println "k =" k)
+
 (bench-simple-dump "chunked simple dump:           ")
 
 (rm-log)
@@ -112,5 +112,5 @@
 (bench-worker-load "unindexed chunked worker load: " db-empty)
 (bench-worker-load "indexed chunked worker load:   " db-empty-indexed)
 
-(shutdown-agents)
 (rm-log)
+(quit)

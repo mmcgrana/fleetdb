@@ -85,25 +85,23 @@
         [m tb tq]))))
 
 (defn bench [label build query n]
-  (println label)
   (let [[m tb tq] (mem-times #(build n) (if query #(query % n)))]
-    (println "memory usage (MB):" m)
-    (println "build time (sec):  " tb)
+    (println label "memory usage:" m)
+    (println label "build time:  " tb)
     (if query
-      (println "query time (sec):  " tq))
-    (prn)))
+      (println label "query time:  " tq))))
 
 (def tests
-  [["seq"       build-seq       nil]
-   ["hashmap"   build-hashmap   query-jmap]
-   ["treemap"   build-treemap   query-jmap]
-   ["map"       build-map       query-cmap]
-   ["transmap"  build-transmap  query-cmap]
+  [["seq      " build-seq       nil]
+   ["hashmap  " build-hashmap   query-jmap]
+   ["treemap  " build-treemap   query-jmap]
+   ["map      " build-map       query-cmap]
+   ["transmap " build-transmap  query-cmap]
    ["sortedmap" build-sortedmap query-cmap]])
 
 (def n 2000000)
 
+(println "-- maps")
 (println "n =" n)
-(println)
 (doseq [[label build-name query-name] tests]
   (bench label build-name query-name n))
