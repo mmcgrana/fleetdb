@@ -2,7 +2,7 @@
 
 (use '(fleetdb serializer))
 
-(import '(fleetdb Serializer)
+(import '(fleetdb Serializer))
 
 (defn wall-time [f]
   (let [start  (System/nanoTime)

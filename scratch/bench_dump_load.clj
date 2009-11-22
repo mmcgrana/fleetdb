@@ -22,11 +22,16 @@
 
 (def log-path "/Users/mmcgrana/Desktop/load.out")
 
+(def n 1000000)
+(def k 100)
+
 (defn rm-log []
   (sh "rm" "-f" log-path))
 
-(def n 10000)
-(def k 100)
+(defn gen-log []
+  (let [dos (dos-init log-path)]
+    (doseq [r-seq (partition k (records n))]
+      (dos-write dos [:insert {:records (vec r-seq)}]))))
 
 (def db-empty (init))
 
@@ -42,17 +47,19 @@
       (if-not (identical? elem eof-val)
         (cons elem (dis-seq dis eof-val))))))
 
-(rm-log)
-
 (println "n =" n)
 (println "k =" k)
 (println)
 
-(let [dos (dos-init log-path)]
-  (doseq [r-seq (partition k (records n))]
-    (dos-write dos [:insert {:records (vec r-seq)}])))
+(defn bench-simple-dump [label]
+  (let [dos (dos-init log-path)
+        db  (first (query (init) [:insert {:records (records n)}]))]
+  (println label
+    (timed
+      #(doseq [r-seq (partition k (vals (:rmap db)))]
+         (dos-write dos [:insert {:records (vec r-seq)}]))))))
 
-(defn bench-load [label db-base]
+(defn bench-simple-load [label db-base]
   (println label
     (timed
       #(let [dis (dis-init log-path)]
@@ -88,8 +95,13 @@
                (recur (first (query db-int q)))
                db-int)))))))
 
-(bench-load        "unindexed chunked simple load: " db-empty)
-(bench-load        "indexed chunked simple load:   " db-empty-indexed)
+(bench-simple-dump "chunked simple dump:           ")
+
+(rm-log)
+(gen-log)
+
+(bench-simple-load "unindexed chunked simple load: " db-empty)
+(bench-simple-load "indexed chunked simple load:   " db-empty-indexed)
 
 (bench-seq-load    "unindexed chunked seq'ed load: " db-empty)
 (bench-seq-load    "indexed chunked seq'ed load:   " db-empty-indexed)

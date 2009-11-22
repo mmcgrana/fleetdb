@@ -1,0 +1,12 @@
+n = 1000000
+k = 100
+
+chunked simple dump:            5.745108
+unindexed chunked simple load:  9.587662
+indexed chunked simple load:    15.710898
+unindexed chunked seq'ed load:  8.69547
+indexed chunked seq'ed load:    15.914066
+unindexed chunked seque'd load: 8.326827
+indexed chunked seque'd load:   13.501105
+unindexed chunked worker load:  8.692825
+indexed chunked worker load:    16.166108

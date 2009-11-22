@@ -124,7 +124,7 @@ public class Serializer {
 
         case LONG_TYPE:
           return dis.readLong();
-
+        
         case DOUBLE_TYPE:
           return dis.readDouble();
 
