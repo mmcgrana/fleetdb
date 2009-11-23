@@ -1,5 +1,5 @@
 (ns fleetdb.embedded
-  (:use (fleetdb util))
+  (:use [fleetdb.util :only (def-)])
   (:require (fleetdb [core :as core] [exec :as exec] [io :as io])))
 
 (def- write-query-type?
@@ -19,11 +19,11 @@
       prev-path)))
 
 (defn- read-from [read-path]
-  (let [dis       (io/dis-init read-log-path)
-        header    (io/dis-read! dis eof)
+  (let [dis       (io/dis-init read-path)
+        header    (io/dis-read! dis)
         prev-path (header-read-path header)
-        prev-db   (if prev-path (load-from prev-path) (core/init))]
-    (reduce #(first (core/query %1 %2)) prev-db (dis-seq dis))))
+        prev-db   (if prev-path (read-from prev-path) (core/init))]
+    (reduce #(first (core/query %1 %2)) prev-db (io/dis-seq dis))))
 
 (defn- write-to [db write-path]
   (let [dos (io/dos-init write-path)]
@@ -37,21 +37,21 @@
   (if (= (q-type :checked-write)) (:write q) q))
 
 (defn init [read-path write-path]
-  (let [db         (if read-path (read-from read-oath) (core/init))
+  (let [db         (if read-path (read-from read-path) (core/init))
         write-dos  (if write-path (io/dos-init write-path))
-        write-path (exec/init-pipe)]
-    (if wd
+        write-pipe (exec/init-pipe)]
+    (if write-dos
       (io/dos-write write-dos {:prev-path read-path}))
-    (atom db
-      :meta {:write-pipe wp :write-path write-path :write-dos write-dos})))
+    (atom db :meta {:write-pipe write-pipe
+                    :write-path write-path :write-dos write-dos})))
 
 (defn snapshot [dba snapshot-path tmp-dir-path]
   (assert (dba? dba))
   (assert (not (persistent? dba)))
-  (let [temp-path (io/temp-path tmp-dir-path "snapshot")
+  (let [tmp-path ( io/tmp-path tmp-dir-path "snapshot")
         write-dos (:write-dos (meta dba))]
-    (write-to @dba write-path)
-    (io/rename temp-path snapshot-path)
+    (write-to @dba tmp-path)
+    (io/rename tmp-path snapshot-path)
     tmp-path))
 
 (defn branch [dba new-write-path]
@@ -73,7 +73,7 @@
   (exec/execute (:write-pipe (meta dba))
     #(let [old-write-path (:write-path (meta dba))
            old-write-dos  (:write-dos  (meta dba))
-           tmp-write-path (io/temp-path tmp-dir-path "compact")
+           tmp-write-path (io/tmp-path tmp-dir-path "compact")
            new-write-dos  (io/dos-init new-write-path)
            db             @dba]
        (io/dos-write new-write-dos

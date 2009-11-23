@@ -37,9 +37,9 @@
 (defn dis-read [dis eof-val]
   (Serializer/deserialize dis eof-val))
 
-(defn dis-read! [dis eof-val]
-  (let [r (dis-read dis eof-val)]
-    (assert (not (identical? r eof-val)))
+(defn dis-read! [dis]
+  (let [r (dis-read dis eof)]
+    (assert (not (identical? r eof)))
     r))
 
 (defn dis-seq [dis]
@@ -51,13 +51,13 @@
 (defn dis-close [#^DataInputStream dis]
   (.close dis))
 
-(defn temp-path [dir-path prefix]
-  (let [temp-dir  (File. tmp-dir-path)
-        temp-file (File/createTempFile prefix nil temp-dir)]
-    (.getAbsolutePath temp-file)))
+(defn tmp-path [#^String tmp-dir-path prefix]
+  (let [tmp-dir  (File. tmp-dir-path)
+        tmp-file (File/createTempFile prefix nil tmp-dir)]
+    (.getAbsolutePath tmp-file)))
 
-(defn rename [from to]
+(defn rename [#^String from #^String to]
   (assert (.renameTo (File. from) (File. to))))
 
-(defn exist? [path]
+(defn exist? [#^String path]
   (.exists (File. path)))

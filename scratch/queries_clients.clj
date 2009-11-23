@@ -40,7 +40,14 @@
 [:explain {:query [:select _]}]
 => <query_plan>
 
+; server only
+[:snapshot {:snapshot-path "/foo/snap.bin" :tmp-dir-path "/tmp"}]
+=> "/tmp/snap123.tmp"
 
+[:branch {:new-write-path "/foo/new.bin"}]
+=> "/foo/old.bin"
+
+[:compact {:compact-path :new-write-path :tmp-dir-path}]
 ; embedded mode
 enter pipe
   get old db
