@@ -1,6 +1,6 @@
 (set! *warn-on-reflection* true)
 
-(use '(fleetdb core serializer)
+(use '(fleetdb core io)
      '(clojure.contrib shell-out))
 
 (defn nano-time []

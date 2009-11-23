@@ -1,6 +1,6 @@
 (set! *warn-on-reflection* true)
 
-(use '(fleetdb serializer))
+(use '(fleetdb io))
 
 (import '(fleetdb Serializer))
 

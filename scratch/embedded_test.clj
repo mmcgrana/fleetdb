@@ -1,6 +1,6 @@
 (set! *warn-on-reflection* true)
 
-(use '(fleetdb [embedded :as embedded] [executor :as executor]))
+(use '(fleetdb [embedded :as embedded] [exec :as exec]))
 
 (def dba (embedded/init))
 
@@ -27,20 +27,20 @@
   (dotimes [_ n]
     (dorun (embedded/query dba [:select {:where [:= :id 50]}]))))
 
-(let [pool (executor/init-pool 2)]
+(let [pool (exec/init-pool 2)]
   (time
     (do
       (dotimes [_ n]
-        (executor/submit pool #(dorun (embedded/query dba [:select]))))
-      (executor/shutdown pool)
-      (executor/await-termination pool 60))))
+        (exec/submit pool #(dorun (embedded/query dba [:select]))))
+      (exec/shutdown pool)
+      (exec/await-termination pool 60))))
 
-(let [pool (executor/init-pool 2)]
+(let [pool (exec/init-pool 2)]
   (time
     (do
       (dotimes [_ n]
-        (executor/submit pool #(dorun (embedded/query dba [:select {:where [:= :id 50]}]))))
-      (executor/shutdown pool)
-      (executor/await-termination pool 60))))
+        (exec/submit pool #(dorun (embedded/query dba [:select {:where [:= :id 50]}]))))
+      (exec/shutdown pool)
+      (exec/await-termination pool 60))))
 
 (embedded/close dba)

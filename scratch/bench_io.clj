@@ -4,7 +4,7 @@
   '(com.yourkit.api Controller ProfilingModes))
 
 (use
-  '(fleetdb serializer)
+  '(fleetdb io)
   '(clojure.contrib shell-out))
 
 (defn profile [body]

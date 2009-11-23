@@ -41,64 +41,77 @@
 => <query_plan>
 
 
-; Server
-
-(def dba (embedded/init))
-
-(defn recieve [q]
-  (embedded/query dba q))
-
-
-; Client
-
-(def conn (connect params))
-
-(query conn [:select {:where [:= :id id]}])
-(query conn [:insert {:records records}])
-
-; Embedded
-
-enter executor
+; embedded mode
+enter pipe
   get old db
   comp result, new db
-  write to simplified query to log
+  if logging, write simplified query to log
   swap new db in
   return result
-exit executor
+exit pipe
 
-; Log writing
-open dos after database
-do nothing on read query
-write write and multi-write directly
-write :write of checked-write
-persistance can stay out of core, right? - just put in embedded
+; operations
+init
+snapshot
+branch
+compact (tmp-dir log-head)
 
-; log reading
+; snapshot
+for non-persisting db only
+close over db state
+write to specified dos indicating no tail, then insert commands, then indexes
+rename tmp file to specified path
 
-open dis
-reduce database over query-seq
-then return database
+; branch
+for persisting db only
+put into write pipe
+  switch to new dos point to prev tail path
+
+; compaction
+from persisting db only
+put into write pipe
+  close over current db state
+  switch to new dos pointing to both compaction path and prev tail path
+  in new thread, freeing write pipe
+    to temp path, write snapshot
+    rename temp path to snapshot path
+
+; log loading
+(see old code)
+get file seq from headers, going to second reference if first not found
+reduce of file seq
+  reduce over commands in file
+    init empty database with
+
+; server
+(def dba (embedded/init))
+(defn recieve [q] (embedded/query dba q))
+bootstrap.setOption("child.tcpNoDelay", true);
+bootstrap.setOption("child.keepAlive", true);
+
 
 ; Todo
-exceptions & interaction with threading
-log writing
-log loading
-snapshoting
-forking
-recursive log loading
-log compacting
-embedded and server modes
-initializing
-stopping - ctr-c
-optional persistence
-query statistics
+X exceptions & interaction with threading
+X log writing
+x tag
+x snapshot
+X log compacting
+x recursive log loading
+x embedded
+x optional persistence
+
+text server
+binary server
+binary client
+
 query profiling / response normalization
-replication
-distribution
+qualified indexes
 tables
+benchmark suite
+
+query statistics / logging
 file management
-text client-server
-binary client-server
 atomic operations
 full text search
-benchmark suite
+replication
+distribution

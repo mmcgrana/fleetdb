@@ -1,4 +1,4 @@
-(ns fleetdb.executor
+(ns fleetdb.exec
   (:import (java.util.concurrent ExecutorService Executors TimeUnit)))
 
 (defn init-pipe []
@@ -21,3 +21,6 @@
 
 (defn await-termination [#^ExecutorService executor timeout-secs]
   (.awaitTermination executor timeout-secs TimeUnit/SECONDS))
+
+(defn async [#^Runnable f]
+  (.start (Thread. f)))
