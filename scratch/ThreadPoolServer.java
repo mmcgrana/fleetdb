@@ -1,5 +1,3 @@
-package fleetdb;
-
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.IOException;
@@ -20,6 +18,7 @@ public class ThreadPoolServer {
         PrintWriter out = new PrintWriter(socket.getOutputStream());
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         in.readLine();
+        // if (in.readLine().equals("pin");
         out.println("HTTP/1.0 200 OK");
         out.println();
         out.println("Content-Length: 1354");

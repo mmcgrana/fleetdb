@@ -48,6 +48,8 @@
 => "/foo/old.bin"
 
 [:compact {:compact-path :new-write-path :tmp-dir-path}]
+=> ?
+
 ; embedded mode
 enter pipe
   get old db
@@ -106,12 +108,16 @@ X log compacting
 x recursive log loading
 x embedded
 x optional persistence
+x text server
 
-text server
+testing persistent vs non-persistent servers
 binary server
 binary client
 
-query profiling / response normalization
+query timeout option
+query profile option
+response normalization
+streaming request/response
 qualified indexes
 tables
 benchmark suite
