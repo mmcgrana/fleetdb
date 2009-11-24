@@ -1,7 +1,7 @@
 import java.io.*;
 import java.net.*;
 
-public class ThreadPerConnServer {
+public class ThreadPerConnPersistentServer {
   
   private static class ServerHandler extends Thread {
     private final Socket socket;
@@ -11,17 +11,17 @@ public class ThreadPerConnServer {
       try {
         PrintWriter out = new PrintWriter(socket.getOutputStream());
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        String msg = in.readLine();
-        if (msg.equals("ping")) {
-          out.println("pong");
-          out.close();
-          in.close();
-          socket.close();
-        } else {
-          System.err.print("Unexpected request: ");
-          System.err.println(msg);
-          System.err.flush();
-          System.exit(1);
+        while (true) {
+          String msg = in.readLine();
+          if (msg.equals("ping")) {
+            out.println("pong");
+            out.flush();
+          } else {
+            System.err.print("Unexpected request: ");
+            System.err.println(msg);
+            System.err.flush();
+            System.exit(1);
+          }
         }
       } catch (IOException e) {
         e.printStackTrace();

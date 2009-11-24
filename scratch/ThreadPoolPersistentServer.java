@@ -2,7 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.util.concurrent.*;
 
-public class ThreadPoolServer {
+public class ThreadPoolPersistentServer {
   
   private static class ServerHandler implements Runnable {
     private final Socket socket;
@@ -12,17 +12,17 @@ public class ThreadPoolServer {
       try {
         PrintWriter out = new PrintWriter(socket.getOutputStream());
         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        String msg = in.readLine();
-        if (msg.equals("ping")) {
-          out.println("pong");
-          out.close();
-          in.close();
-          socket.close();
-        } else {
-          System.err.print("Unexpected request: ");
-          System.err.println(msg);
-          System.err.flush();
-          System.exit(1);
+        while (true) {
+          String msg = in.readLine();
+          if (msg.equals("ping")) {
+            out.println("pong");
+            out.flush();
+          } else {
+            System.err.print("Unexpected request: ");
+            System.err.println(msg);
+            System.err.flush();
+            System.exit(1);
+          } 
         }
       } catch (IOException e) {
         e.printStackTrace();

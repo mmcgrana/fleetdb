@@ -109,10 +109,12 @@ x recursive log loading
 x embedded
 x optional persistence
 x text server
+x testing persistent vs non-persistent servers
 
-testing persistent vs non-persistent servers
 binary server
 binary client
+remote repl
+clojure/java/jruby/ruby app-level clients
 
 query timeout option
 query profile option
