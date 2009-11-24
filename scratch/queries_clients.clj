@@ -65,6 +65,10 @@ snapshot
 branch
 compact (tmp-dir log-head)
 
+; fork
+for non-persistent db only
+new box with copied boxed value, new pipe
+
 ; snapshot
 for non-persisting db only
 close over db state
@@ -102,9 +106,10 @@ bootstrap.setOption("child.keepAlive", true);
 ; Todo
 X exceptions & interaction with threading
 X log writing
-x tag
+x fork
+x branch
 x snapshot
-X log compacting
+X compact
 x recursive log loading
 x embedded
 x optional persistence

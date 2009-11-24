@@ -13,9 +13,9 @@
   (:write-path (meta dba)))
 
 (defn- header-read-path [header]
-  (let [{:keys [compact-prev-path prev-path]} header]
-    (if (and compact-prev-path (io/exist? compact-prev-path))
-      compact-prev-path
+  (let [{:keys [compact-path prev-path]} header]
+    (if (and compact-path (io/exist? compact-path))
+      compact-path
       prev-path)))
 
 (defn- read-from [read-path]
@@ -54,6 +54,11 @@
     (io/rename tmp-path snapshot-path)
     tmp-path))
 
+(defn fork [dba]
+  (assert (dba? dba))
+  (assert (not (persistent? dba)))
+  (atom @dba :meta {:write-pipe (exec/init-pipe)}))
+
 (defn branch [dba new-write-path]
   (assert (dba? dba))
   (assert (persistent? dba))
@@ -77,7 +82,7 @@
            new-write-dos  (io/dos-init new-write-path)
            db             @dba]
        (io/dos-write new-write-dos
-         {:compact-prev-path compact-path :prev-path old-write-path})
+         {:compact-path compact-path :prev-path old-write-path})
        (alter-meta! dba assoc
          :write-path new-write-path :write-dos new-write-dos)
        (io/dos-close old-write-dos)
