@@ -1,15 +1,17 @@
 notes
   keep records, record with sha1s  
 
-targets
-  fleetdb
-  postgresql
-  drizzle
-  h2
-  mongodb
-  couchdb
-  redis
-  memcached
+targets      (e) (r)
+  fleetdb     y   y
+  memcached   n   y
+  redis       n   y
+  h2          y   y
+  mongodb     n   y
+  couchdb     n   y
+  memcached   n   y
+  drizzle     n   y
+  postgresql  n   y
+  
 
 data "sizes"
   50 MB
@@ -39,7 +41,6 @@ machine specs
     75 GB 15k disk
     32 GB SSD disk
     $425 / month
-
 
 httperf --hog --timeout=5 --client=0/1 --server=127.0.0.1 --port=4444 --uri=/ --send-buffer=4096 --recv-buffer=16384 --num-conns=10000 --num-calls=1
 ab -n 10000 -c 100 http://127.0.0.1:4444/

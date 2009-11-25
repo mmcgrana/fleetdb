@@ -1,110 +1,85 @@
 (ns fleetdb.embedded
-  (:use [fleetdb.util :only (def-)])
+  (:use [fleetdb.util :only (def- ?)])
   (:require (fleetdb [core :as core] [exec :as exec] [io :as io])))
 
 (def- write-query-type?
-  #{:insert :update :delete :create-index :drop-index
+  #{:insert :update :delete
+    :create-index :drop-index
     :multi-write :checked-write})
 
 (defn- dba? [dba]
-  (if (:write-pipe (meta dba)) true))
+  (? (:write-pipe ^dba)))
 
 (defn- persistent? [dba]
-  (:write-path (meta dba)))
+  (? (:write-pipe ^dba)))
 
-(defn- header-read-path [header]
-  (let [{:keys [compact-path prev-path]} header]
-    (if (and compact-path (io/exist? compact-path))
-      compact-path
-      prev-path)))
+(defn- ephemral? [dba]
+  (not (persistent? dba)))
 
 (defn- read-from [read-path]
   (let [dis       (io/dis-init read-path)
-        header    (io/dis-read! dis)
-        prev-path (header-read-path header)
-        prev-db   (if prev-path (read-from prev-path) (core/init))]
-    (reduce #(first (core/query %1 %2)) prev-db (io/dis-seq dis))))
+        header    (io/dis-read! dis)]
+    (assert (:root header))
+    (reduce #(first (core/query %1 %2)) (core/init) (io/dis-seq dis))))
 
 (defn- write-to [db write-path]
   (let [dos (io/dos-init write-path)]
+    (io/dos-write dos {:root true})
     (doseq [records (partition 100 (core/query db [:select]))]
       (io/dos-write dos [:insert {:records (vec records)}]))
     (doseq [ispec (core/query db [:list-indexes])]
       (io/dos-write dos [:create-index {:on ispec}]))
     (io/dos-close dos)))
 
-(defn- simplified-write-query [[q-type q-opts :as q]]
-  (if (= (q-type :checked-write)) (:write q) q))
+(defn- init* [db other-meta]
+  (atom db :meta (merge {:write-pipe (exec/init-pipe)} other-meta)))
 
-(defn init [read-path write-path]
-  (let [db         (if read-path (read-from read-path) (core/init))
-        write-dos  (if write-path (io/dos-init write-path))
-        write-pipe (exec/init-pipe)]
-    (if write-dos
-      (io/dos-write write-dos {:prev-path read-path}))
-    (atom db :meta {:write-pipe write-pipe
-                    :write-path write-path :write-dos write-dos})))
+(defn init-ephemral []
+  (init* (core/init)))
+
+(defn load-ephemral [read-path]
+  (init* (read-from read-path)))
+
+(defn init-persistent [write-path]
+  (let [write-dos (io/dos-init write-path)]
+    (io/dos-write write-dos {:root true})
+    (init* (core/init) {:write-dos write-dos})))
+
+(defn load-persistent [read-write-path]
+  (let [db        (read-from read-write-path)
+        write-dos (io/dos-init read-write-path)]
+    (init* db {:write-dos write-dos})))
+
+(defn fork [dba]
+  (assert (dba? dba))
+  (assert (ephemral? dba))
+  (init* @dba))
 
 (defn snapshot [dba snapshot-path tmp-dir-path]
   (assert (dba? dba))
-  (assert (not (persistent? dba)))
-  (let [tmp-path ( io/tmp-path tmp-dir-path "snapshot")
-        write-dos (:write-dos (meta dba))]
+  (assert (ephemral? dba))
+  (let [tmp-path  (io/tmp-path tmp-dir-path "snapshot")]
     (write-to @dba tmp-path)
     (io/rename tmp-path snapshot-path)
     tmp-path))
 
-(defn fork [dba]
-  (assert (dba? dba))
-  (assert (not (persistent? dba)))
-  (atom @dba :meta {:write-pipe (exec/init-pipe)}))
-
-(defn branch [dba new-write-path]
-  (assert (dba? dba))
-  (assert (persistent? dba))
-  (exec/execute (:write-pipe (meta dba))
-    #(let [old-write-path (:write-path (meta dba))
-           old-write-dos  (:write-dos  (meta dba))
-           new-write-dos  (io/dos-init new-write-path)]
-       (io/dos-write new-write-dos {:prev-path old-write-path})
-       (alter-meta! dba assoc
-         :write-path new-write-path :write-dos new-write-dos)
-       (io/dos-close old-write-dos)
-       old-write-path)))
-
-(defn compact [dba compact-path new-write-path tmp-dir-path]
-  (assert (dba? dba))
-  (assert (persistent? dba))
-  (exec/execute (:write-pipe (meta dba))
-    #(let [old-write-path (:write-path (meta dba))
-           old-write-dos  (:write-dos  (meta dba))
-           tmp-write-path (io/tmp-path tmp-dir-path "compact")
-           new-write-dos  (io/dos-init new-write-path)
-           db             @dba]
-       (io/dos-write new-write-dos
-         {:compact-path compact-path :prev-path old-write-path})
-       (alter-meta! dba assoc
-         :write-path new-write-path :write-dos new-write-dos)
-       (io/dos-close old-write-dos)
-       (exec/async (fn []
-         (write-to db tmp-write-path)
-         (io/rename tmp-write-path compact-path)))
-       tmp-write-path)))
-
 (defn query [dba [query-type :as q]]
   (assert (dba? dba))
   (if (write-query-type? query-type)
-    (exec/execute (:write-pipe (meta dba))
+    (exec/execute (:write-pipe ^dba)
       #(let [old-db          @dba
              [new-db result] (core/query old-db q)]
-         (if-let [write-dos (:write-dos (meta dba))]
-           (io/dos-write write-dos (simplified-write-query q)))
+         (if-let [write-dos (:write-dos ^dba)]
+           (io/dos-write write-dos q))
          (assert (compare-and-set! dba old-db new-db))
          result))
     (core/query @dba q)))
 
 (defn close [dba]
-  (let [{:keys [write-pipe write-dos]} (meta dba)]
-    (exec/shutdown-now write-pipe)
-    (exec/await-termination write-pipe 60)
-    (if write-dos (io/dos-close write-dos))))
+  (assert (dba? dba))
+  (let [write-pipe (:write-pipe ^dba)]
+    (exec/shutdown-now (:write-pipe ^dba))
+    (exec/await-termination (:write-pipe ^dba) 60))
+  (if-let [write-dos (:write-dos ^dba)]
+    (io/dos-close write-dos))
+  true)

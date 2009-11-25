@@ -1,5 +1,4 @@
-; Queries and associated responses
-
+; queries and associated responses
 [:select {:where <where> :order _ :offset _ :limit _ :only _}]
 <= [<record> <record> <record>]
 
@@ -40,95 +39,27 @@
 [:explain {:query [:select _]}]
 => <query_plan>
 
+
 ; server only
-[:snapshot {:snapshot-path "/foo/snap.bin" :tmp-dir-path "/tmp"}]
-=> "/tmp/snap123.tmp"
+[:ping]
+"pong"
 
-[:branch {:new-write-path "/foo/new.bin"}]
-=> "/foo/old.bin"
+[:snapshot {:snapshot-path "/foo/snap.fleet"}]
+true
 
-[:compact {:compact-path :new-write-path :tmp-dir-path}]
-=> ?
+; todo
+java binary client
+clojure binary client
+ruby binary client
+jruby binary client
+benchmark suite
+qualified indexes or tables
+tag/handler/compact
 
-; embedded mode
-enter pipe
-  get old db
-  comp result, new db
-  if logging, write simplified query to log
-  swap new db in
-  return result
-exit pipe
-
-; operations
-init
-snapshot
-branch
-compact (tmp-dir log-head)
-
-; fork
-for non-persistent db only
-new box with copied boxed value, new pipe
-
-; snapshot
-for non-persisting db only
-close over db state
-write to specified dos indicating no tail, then insert commands, then indexes
-rename tmp file to specified path
-
-; branch
-for persisting db only
-put into write pipe
-  switch to new dos point to prev tail path
-
-; compaction
-from persisting db only
-put into write pipe
-  close over current db state
-  switch to new dos pointing to both compaction path and prev tail path
-  in new thread, freeing write pipe
-    to temp path, write snapshot
-    rename temp path to snapshot path
-
-; log loading
-(see old code)
-get file seq from headers, going to second reference if first not found
-reduce of file seq
-  reduce over commands in file
-    init empty database with
-
-; server
-(def dba (embedded/init))
-(defn recieve [q] (embedded/query dba q))
-bootstrap.setOption("child.tcpNoDelay", true);
-bootstrap.setOption("child.keepAlive", true);
-
-
-; Todo
-X exceptions & interaction with threading
-X log writing
-x fork
-x branch
-x snapshot
-X compact
-x recursive log loading
-x embedded
-x optional persistence
-x text server
-x testing persistent vs non-persistent servers
-
-binary server
-binary client
-remote repl
-clojure/java/jruby/ruby app-level clients
-
+; ideas
+response normalization
 query timeout option
 query profile option
-response normalization
-streaming request/response
-qualified indexes
-tables
-benchmark suite
-
 query statistics / logging
 file management
 atomic operations

@@ -62,6 +62,7 @@
     (with-open [socket socket
                 out    (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))
                 in     (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))]
+      (.setKeepAlive socket true)
       (loop []
         (let [read-result (binary-read-query in io/eof)]
           (when-not (identical? io/eof read-result)
@@ -76,17 +77,20 @@
       (stacktrace/pst-on System/err false e)
       (.println System/err))))
 
-(defn run [read-path write-path port binary]
-  (let [text-ss (ServerSocket. port)
-        dba     (embedded/init read-path write-path)
-        pool    (exec/init-pool 100)
-        handler (if binary binary-handler text-handler)]
-    (println "FleetDB: serving port" port)
+(defn run [{:keys [port binary persistent db-path]}]
+  (let [server-socket (ServerSocket. port)
+        pool          (exec/init-pool 100)
+        handler       (if binary binary-handler text-handler)
+        loading       (io/exist? db-path)
+        dba           (if persistent
+                        (if loading
+                          (embedded/load-persistent db-path)
+                          (embedded/init-persistent db-path))
+                        (if loading
+                          (embedded/load-ephemral db-path)
+                          (embedded/init-ephemral)))]
+    (println "FleetDB serving port" port)
     (loop []
-      (let [socket (.accept text-ss)]
+      (let [socket (doto (.accept server-socket))]
         (exec/submit pool #(handler dba socket)))
       (recur))))
-
-(use 'clojure.contrib.shell-out)
-(sh "rm" "-f" "/Users/mmcgrana/Desktop/log")
-(run nil "/Users/mmcgrana/Desktop/log" 4444 true)

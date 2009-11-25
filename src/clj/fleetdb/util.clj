@@ -15,6 +15,9 @@
 
 (def != (complement =))
 
+(defn ? [val]
+  (if val true false))
+
 (defn raise [#^String msg]
   (throw (Exception. msg)))
 
