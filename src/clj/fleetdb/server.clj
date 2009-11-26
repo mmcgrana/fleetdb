@@ -13,7 +13,7 @@
     "pong"
     (try
       (let [result (embedded/query dba query)]
-        (if (coll? result) (vec result) result))
+        (if (sequential? result) (vec result) result))
       (catch Exception e e))))
 
 (defn- text-read-query [#^PushbackReader in eof-val]
@@ -94,7 +94,7 @@
                         (if loading
                           (embedded/load-ephemral db-path)
                           (embedded/init-ephemral)))]
-    (println "FleetDB serving port" port)
+    (println "FleetDB serving" (name protocol) "protocol on port" port)
     (loop []
       (let [socket (doto (.accept server-socket))]
         (exec/submit pool #(handler dba socket)))

@@ -302,8 +302,8 @@
   (get-in db [:rmap id]))
 
 (defmethod exec-plan :rmap-multilookup [db [_ ids _]]
-  (let [rmap (:rmap db)]
-    (compact (map #(get rmap %) ids))))
+  (if-let [rmap (:rmap db)]
+    (compact (map #(rmap %) ids))))
 
 (defmethod exec-plan :rmap-scan [db _]
   (vals (:rmap db)))
@@ -432,19 +432,32 @@
 (defmethod query :select [db [_ opts]]
   (find-records db opts))
 
+(defmethod query :get [db [_ id-s]]
+  (if-let [rmap (:rmap db)]
+    (if (vector? id-s)
+      (compact (map #(rmap %) id-s))
+      (rmap id-s))))
+
 (defmethod query :count [db [_ opts]]
   (count (find-records db opts)))
+
+(defn- db-apply1 [{old-rmap :rmap old-imap :imap :as db} record rmap-fn imap-fn]
+  (let [new-rmap (rmap-fn old-rmap record)
+        new-imap (imap-fn old-imap record)]
+    [(assoc db :rmap new-rmap :imap new-imap) 1]))
 
 (defn- db-apply [{old-rmap :rmap old-imap :imap :as db} records apply-fn]
   (let [[new-rmap new-imap] (reduce apply-fn [old-rmap old-imap] records)]
     [(assoc db :rmap new-rmap :imap new-imap) (count records)]))
 
-(defmethod query :insert [db [_ {:keys [records]}]]
-  (assert records)
-  (db-apply db records
-    (fn [[int-rmap int-imap] record]
-      [(rmap-insert int-rmap record)
-       (imap-insert int-imap record)])))
+(defmethod query :insert [db [_ record-s]]
+  (assert record-s)
+  (if (map? record-s)
+   (db-apply1 db record-s rmap-insert imap-insert)
+   (db-apply db record-s
+     (fn [[int-rmap int-imap] record]
+       [(rmap-insert int-rmap record)
+        (imap-insert int-imap record)]))))
 
 (defmethod query :update [db [_ {:keys [with] :as opts}]]
   (assert with)

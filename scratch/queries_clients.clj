@@ -1,11 +1,16 @@
 ; queries and associated responses
+
 [:select {:where <where> :order _ :offset _ :limit _ :only _}]
+=> [<record> <record> <record>]
+
+[:get <id-s>]
+=> <record>
 => [<record> <record> <record>]
 
 [:count {:where <where> :order _ :offset _ :limit _}]
 => <count>
 
-[:insert {:records _}]
+[:insert <record-s>]
 => [<db> <count>]
 
 [:update {:where <where> :order _ :offset _ :limit _ :with _}]
@@ -50,8 +55,6 @@
 [:branch {:name "branch1"}]
 => [new-db "branch1"]
 
-ruby binary client
-jruby binary client
 benchmark suite
 qualified indexes or tables
 tag/handler/compact
