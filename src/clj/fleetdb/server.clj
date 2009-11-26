@@ -1,4 +1,5 @@
 (ns fleetdb.server
+  (:use     (fleetdb [util :only (def-)]))
   (:require (fleetdb [embedded :as embedded] [io :as io] [exec :as exec])
             (clj-stacktrace [repl :as stacktrace]))
   (:import  (java.net ServerSocket Socket)
@@ -22,11 +23,10 @@
 
 (defn- text-write-exception [#^PrintWriter out e]
   (stacktrace/pst-on out false e)
-  (.println out)
   (.flush out))
 
 (defn- text-write-result [#^PrintWriter out result]
-  (.println out (prn-str result))
+  (.println out (pr-str result))
   (.flush out))
 
 (defn- text-handler [dba #^Socket socket]
@@ -79,10 +79,13 @@
       (stacktrace/pst-on System/err false e)
       (.println System/err))))
 
-(defn run [{:keys [port binary persistent db-path]}]
+(def- protocol-handlers
+  {:binary binary-handler :text text-handler})
+
+(defn run [{:keys [port protocol threads persistent db-path]}]
   (let [server-socket (ServerSocket. port)
-        pool          (exec/init-pool 100)
-        handler       (if binary binary-handler text-handler)
+        pool          (exec/init-pool threads)
+        handler       (protocol-handlers protocol)
         loading       (io/exist? db-path)
         dba           (if persistent
                         (if loading
