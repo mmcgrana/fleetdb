@@ -8,10 +8,12 @@
                      DataOutputStream BufferedOutputStream )))
 
 (defn- safe-query [dba query]
-  (try
-    (let [result (embedded/query dba query)]
-      (if (coll? result) (vec result) result))
-    (catch Exception e e)))
+  (if (= query [:ping])
+    "pong"
+    (try
+      (let [result (embedded/query dba query)]
+        (if (coll? result) (vec result) result))
+      (catch Exception e e))))
 
 (defn- text-read-query [#^PushbackReader in eof-val]
   (try
@@ -52,7 +54,7 @@
     (catch Exception e e)))
 
 (defn- binary-write-exception [#^DataOutputStream out e]
-  (io/dos-write [1 (stacktrace/pst-str e)]))
+  (io/dos-write out [1 (stacktrace/pst-str e)]))
 
 (defn- binary-write-result [#^DataOutputStream out result]
   (io/dos-write out [0 result]))

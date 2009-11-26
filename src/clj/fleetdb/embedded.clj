@@ -78,7 +78,7 @@
 (defn close [dba]
   (assert (dba? dba))
   (let [write-pipe (:write-pipe ^dba)]
-    (exec/shutdown-now (:write-pipe ^dba))
+    (exec/shutdown (:write-pipe ^dba))
     (exec/await-termination (:write-pipe ^dba) 60))
   (if-let [write-dos (:write-dos ^dba)]
     (io/dos-close write-dos))

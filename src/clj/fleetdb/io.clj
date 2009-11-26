@@ -22,7 +22,7 @@
 
 (defn dos-init [#^String dos-path]
   (DataOutputStream. (BufferedOutputStream.
-    (FileOutputStream. dos-path (exist? dos-path)))))
+    (FileOutputStream. dos-path #^Boolean (exist? dos-path)))))
 
 (defn dos-write [#^DataOutputStream dos obj]
   (Serializer/serialize dos obj)

@@ -48,13 +48,12 @@
 true
 
 ; todo
-java binary client
-clojure binary client
 ruby binary client
 jruby binary client
 benchmark suite
 qualified indexes or tables
 tag/handler/compact
+multiple databases at server level
 
 ; ideas
 response normalization
