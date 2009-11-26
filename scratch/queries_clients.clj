@@ -1,6 +1,6 @@
 ; queries and associated responses
 [:select {:where <where> :order _ :offset _ :limit _ :only _}]
-<= [<record> <record> <record>]
+=> [<record> <record> <record>]
 
 [:count {:where <where> :order _ :offset _ :limit _}]
 => <count>
@@ -29,25 +29,27 @@
 [:multi-write {:queries [<insert> <update> <delete> <index>]}]
 => [<db> [<count> <count> <count> <count>]]
 
-[:checked-write {:check  <read_or_multi-read>
-                 :expect <expected result>
-                 :write  <write_or_multi-write>}]
-=> nil
-=> [<db> <count>]
-=> [<db> [<records> <count>]]
+[:checked-write {:check    <read_or_multi-read>
+                 :expected <expected result>
+                 :write    <write_or_multi-write>}]
+=> [<db> [false <actual-count>]] [<db> [true [<actual-count> <actual-records>]]]
+=> [<db> [true <count>]] [<db> [true [<records> <count>]]]
 
 [:explain {:query [:select _]}]
 => <query_plan>
 
-
-; server only
 [:ping]
-"pong"
+=> "pong"
 
-[:snapshot {:snapshot-path "/foo/snap.fleet"}]
-true
+[:snapshot {:name "snap1"}]
+=> "snap1"
 
-; todo
+[:tag {:name "tag1"}]
+=> "tag1"
+
+[:branch {:name "branch1"}]
+=> [new-db "branch1"]
+
 ruby binary client
 jruby binary client
 benchmark suite

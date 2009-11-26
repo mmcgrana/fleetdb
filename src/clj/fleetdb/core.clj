@@ -493,9 +493,12 @@
     [db []]
     queries))
 
-(defmethod query :checked-write [db [_ {:keys [check expect write]}]]
-  (if (= (query db check) expect)
-    (query db write)))
+(defmethod query :checked-write [db [_ {:keys [check expected write]}]]
+  (let [actual (query db check)]
+    (if (= actual expected)
+      (let [[new-db result] (query db write)]
+        [new-db [true result]])
+      [db [false actual]])))
 
 (defn init []
   {:rmap (sorted-map)
