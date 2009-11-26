@@ -22,5 +22,8 @@
 (defn await-termination [#^ExecutorService executor timeout-secs]
   (.awaitTermination executor timeout-secs TimeUnit/SECONDS))
 
+(defn join [executor timeout-secs]
+  (shutdown executor)
+  (await-termination executor timeout-secs))
 (defn async [#^Runnable f]
   (.start (Thread. f)))

@@ -1,21 +1,20 @@
 (set! *warn-on-reflection* true)
 
-(require (fleetdb client))
+(require '(fleetdb [client :as client] [exec :as exec]))
 
-(defn hit [n]
-  (let [socket (Socket. "localhost" 4444)
-        dis    (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))
-        dos    (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))
-        q      [:ping]]
-    (dotimes [_ n]
-      (io/dos-write dos q)
-      (io/dis-read dis io/eof))))
+(def n 200000)
+(def c 10)
+(def t 100)
 
-(time (hit 100000))
+(defn hit [k]
+  (let [client (client/connect "localhost" 4444)]
+    (dotimes [_ k]
+      (client/query client [:select {:where [:= :id 1]}]))))
+
+(time (hit n))
 
 (time
-  (let [executor (exec/init-pool 10)]
-    (dotimes [_ 10]
-      (exec/submit executor #(hit 10000)))
-    (exec/shutdown executor)
-    (exec/await-termination executor 100)))
+  (let [executor (exec/init-pool c)]
+    (dotimes [_ c]
+      (exec/submit executor #(hit (/ n c))))
+    (assert (exec/join executor t))))

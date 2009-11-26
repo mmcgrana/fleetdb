@@ -58,6 +58,7 @@ tag/handler/compact
 multiple databases at server level
 
 ; ideas
+paramaterized queries
 response normalization
 query timeout option
 query profile option
