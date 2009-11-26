@@ -55,10 +55,11 @@
 [:branch {:name "branch1"}]
 => [new-db "branch1"]
 
-benchmark suite
-qualified indexes or tables
-tag/handler/compact
+
 multiple databases at server level
+server support management commands
+qualified indexes or tables
+benchmark suite
 
 ; ideas
 paramaterized queries

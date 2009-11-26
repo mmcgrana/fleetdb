@@ -1,5 +1,5 @@
 (ns fleetdb.io
-  (:import (fleetdb Serializer)
+  (:import (fleetdb Serializer LimitInputStream)
            (java.io File ByteArrayOutputStream ByteArrayInputStream
                     FileOutputStream BufferedOutputStream DataOutputStream
                     FileInputStream  BufferedInputStream  DataInputStream)))
@@ -20,6 +20,9 @@
 (defn exist? [#^String path]
   (.exists (File. path)))
 
+(defn size [#^String path]
+  (.length (File. path)))
+
 (defn dos-init [#^String dos-path]
   (DataOutputStream. (BufferedOutputStream.
     (FileOutputStream. dos-path #^Boolean (exist? dos-path)))))
@@ -31,9 +34,11 @@
 (defn dos-close [#^DataOutputStream dos]
   (.close dos))
 
-(defn dis-init [#^String dis-path]
+(defn dis-init [#^String dis-path & [size-limit]]
   (assert (exist? dis-path))
-  (DataInputStream. (BufferedInputStream. (FileInputStream. dis-path))))
+  (let [size-wrapper (if size-limit #(LimitInputStream. % size-limit) identity)]
+    (DataInputStream. (BufferedInputStream.
+      (size-wrapper (FileInputStream. dis-path))))))
 
 (defn dis-read [dis eof-val]
   (Serializer/deserialize dis eof-val))
