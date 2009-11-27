@@ -58,7 +58,6 @@
 
 ; todo
 test index usage and maintanence
-test embedded
 test server
 benchmark suite
 cleanup

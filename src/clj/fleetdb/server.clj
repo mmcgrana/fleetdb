@@ -95,7 +95,7 @@
         server-socket (ServerSocket. port 10000 inet)
         pool          (exec/init-pool threads)
         handler       (protocol-handlers protocol)
-        loading       (io/exist? db-path)
+        loading       (and db-path (io/exist? db-path))
         dba           (if ephemral
                         (if loading
                           (embedded/load-ephemral db-path)

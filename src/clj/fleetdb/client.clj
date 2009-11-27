@@ -11,11 +11,11 @@
      :dis    (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))
      :dos    (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))}))
 
-(defn query [client q]
-  (io/dos-write (:dos client) q)
-  (let [r (io/dis-read (:dis client) io/eof)]
-    (assert (!= r io/eof))
-    r))
+(defn query [client command]
+  (io/dos-write (:dos client) command)
+  (let [result (io/dis-read (:dis client) io/eof)]
+    (assert (!= result io/eof))
+    result))
 
 (defn close [client]
   (io/dis-close (:dis client))
