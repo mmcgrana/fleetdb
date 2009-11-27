@@ -1,5 +1,6 @@
 (ns fleetdb.embedded
-  (:use [fleetdb.util :only (def- ?)])
+  (:use [fleetdb.util :only (def- ?)]
+        [clojure.contrib.seq-utils :only (partition-all)])
   (:require (fleetdb [core :as core] [exec :as exec] [io :as io]))
   (:import  (java.util ArrayList)))
 
@@ -12,13 +13,13 @@
   (? (:write-pipe ^dba)))
 
 (defn- persistent? [dba]
-  (? (:write-pipe ^dba)))
-
-(defn- compacting? [dba]
-  (? (:write-buf ^dba)))
+  (? (:write-dos ^dba)))
 
 (defn- ephemral? [dba]
   (not (persistent? dba)))
+
+(defn- compacting? [dba]
+  (? (:write-buf ^dba)))
 
 (defn- replay-command [db query]
   (first (core/query db query)))
@@ -34,7 +35,7 @@
   (let [dos (io/dos-init write-path)]
     (io/dos-write dos {:root true})
     (doseq [coll (core/query db [:list-colls])]
-      (doseq [records (partition 100 (core/query db [:select coll]))]
+      (doseq [records (partition-all 100 (core/query db [:select coll]))]
         (io/dos-write dos [:insert coll (vec records)]))
       (doseq [ispec (core/query db [:list-indexes coll])]
         (io/dos-write dos [:create-index coll ispec])))
@@ -73,26 +74,27 @@
   (assert (ephemral? dba))
   (let [tmp-path  (io/tmp-path "/tmp" "snapshot")]
     (write-to @dba tmp-path)
-    (io/rename tmp-path snapshot-path)
+    (io/mv tmp-path snapshot-path)
     true))
 
 (defn compact [dba]
   (assert (persistent? dba))
+  (assert (not (compacting? dba)))
   (exec/execute (:write-pipe ^dba)
-    #(let [tmp-path (io/tmp-path "/tmp" "compact")
-           db       @dba]
+    #(let [tmp-path      (io/tmp-path "/tmp" "compact")
+           db-comp-start @dba]
+       (alter-meta! dba assoc :write-buf (ArrayList.))
        (exec/async (fn []
-         (write-to db tmp-path)
+         (write-to db-comp-start tmp-path)
          (exec/execute (:write-pipe ^dba)
            (fn []
              (let [dos (io/dos-init tmp-path)]
-               (doseq [command (:write-buf ^dba)]
-                 (io/dos-write dos command))
-               (io/rename tmp-path (:write-path ^dba))
+               (doseq [post-comp-command (:write-buf ^dba)]
+                 (io/dos-write dos post-comp-command))
+               (io/mv tmp-path (:write-path ^dba))
                (io/dos-close (:write-dos ^dba))
                (alter-meta! dba dissoc :write-buf)
                (alter-meta! dba assoc  :write-dos dos))))))
-       (alter-meta! dba assoc :write-buf (ArrayList.))
        true)))
 
 (defn query [dba [query-type :as q]]

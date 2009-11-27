@@ -1,6 +1,6 @@
 (ns fleetdb.planner-test
   (:require (fleetdb [core :as core]))
-  (:use (clj-unit core)))
+  (:use (clj-unit core) (clojure.contrib [def :only (defmacro-)])))
 
 (defn- assert-plan [ispecs opts expected-plan]
   (let [db         (reduce
@@ -10,7 +10,7 @@
         found-plan (core/query db [:explain [:select :elems opts]])]
     (assert= expected-plan found-plan)))
 
-(defmacro defplantest [label ispecs opts expected]
+(defmacro- defplantest [label ispecs opts expected]
   `(deftest ~label (assert-plan ~ispecs ~opts ~expected)))
 
 (defplantest "empty"

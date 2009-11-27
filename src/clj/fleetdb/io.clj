@@ -62,5 +62,8 @@
         tmp-file (File/createTempFile prefix nil tmp-dir)]
     (.getAbsolutePath tmp-file)))
 
-(defn rename [#^String from #^String to]
+(defn mv [#^String from #^String to]
   (assert (.renameTo (File. from) (File. to))))
+
+(defn rm [#^String path]
+  (.delete (File. path)))
