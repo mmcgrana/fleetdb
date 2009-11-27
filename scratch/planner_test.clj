@@ -79,9 +79,9 @@
   [:index-seq [[[:age :asc]] :left-right 23 false :pos-inf true]])
 
 (assert-plan
-  `([[:age :dsc]])
+  `([[:age :desc]])
   {:where [:> :age 23]}
-  [:index-seq [[[:age :dsc]] :left-right :pos-inf true 23 false]])
+  [:index-seq [[[:age :desc]] :left-right :pos-inf true 23 false]])
 
 (assert-plan
   '([[:age :asc]] [[:name :asc] [:age :asc]])
@@ -94,9 +94,9 @@
   [:index-seq [[[:age :asc]] :left-right :neg-inf true :pos-inf true]])
 
 (assert-plan
-  '([[:age :dsc]])
+  '([[:age :desc]])
   {:order [[:age :asc]]}
-  [:index-seq [[[:age :dsc]] :right-left :pos-inf true :neg-inf true]])
+  [:index-seq [[[:age :desc]] :right-left :pos-inf true :neg-inf true]])
 
 (assert-plan
   `([[:name :asc] [:age :asc]])
@@ -116,9 +116,9 @@
   [:index-seq [[[:name :asc] [:age :asc]] :left-right ["mark" :neg-inf] true ["mark" :pos-inf] true]])
 
 (assert-plan
-  '([[:age :asc]] [[:name :asc] [:age :asc]] [[:name :asc] [:age :asc] [:height :dsc]])
+  '([[:age :asc]] [[:name :asc] [:age :asc]] [[:name :asc] [:age :asc] [:height :desc]])
   {:where [:and [:= :name "mark"] [:= :age 23]] :order [[:height :asc]]}
-  [:index-seq [[[:name :asc] [:age :asc] [:height :dsc]] :right-left ["mark" 23 :pos-inf] true ["mark" 23 :neg-inf] true]])
+  [:index-seq [[[:name :asc] [:age :asc] [:height :desc]] :right-left ["mark" 23 :pos-inf] true ["mark" 23 :neg-inf] true]])
 
 (assert-plan
   `([[:age :asc]])
@@ -127,7 +127,7 @@
     [:index-lookup [[[:age :asc]] 23]]])
 
 (defn bench1 [n]
-  (let [ispecs '([[:age :asc]] [[:name :asc] [:age :asc]] [[:name :asc] [:age :asc] [:height :dsc]])
+  (let [ispecs '([[:age :asc]] [[:name :asc] [:age :asc]] [[:name :asc] [:age :asc] [:height :desc]])
         where  [:and [:= :name "mark"] [:= :age 23]]
         order  [[:height :asc]]
         offset 4

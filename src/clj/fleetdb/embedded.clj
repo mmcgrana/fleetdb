@@ -33,10 +33,11 @@
 (defn- write-to [db write-path]
   (let [dos (io/dos-init write-path)]
     (io/dos-write dos {:root true})
-    (doseq [records (partition 100 (core/query db [:select]))]
-      (io/dos-write dos [:insert (vec records)]))
-    (doseq [ispec (core/query db [:list-indexes])]
-      (io/dos-write dos [:create-index {:on ispec}]))
+    (doseq [coll (core/query db [:list-colls])]
+      (doseq [records (partition 100 (core/query db [:select coll]))]
+        (io/dos-write dos [:insert coll (vec records)]))
+      (doseq [ispec (core/query db [:list-indexes coll])]
+        (io/dos-write dos [:create-index coll ispec])))
     (io/dos-close dos)))
 
 (defn- init* [db & [other-meta]]

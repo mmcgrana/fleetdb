@@ -1,45 +1,48 @@
 ; queries and responses
-[:select {:where <where> :order _ :offset _ :limit _ :only _}]
+[:select <coll> {:where _ :order _ :offset _ :limit _ :only _}]
 => [<record> <record> <record>]
 
-[:get <id-s>]
+[:get <coll> <id-s>]
 => <record>
 => [<record> <record> <record>]
 
-[:count {:where <where> :order _ :offset _ :limit _}]
+[:count <coll> {:where _ :order _ :offset _ :limit _}]
 => <count>
 
-[:insert <record-s>]
+[:insert <coll> <record-s>]
 => [<db> <count>]
 
-[:update {:where <where> :order _ :offset _ :limit _ :with _}]
+[:update <coll> <with> {:where _ :order _ :offset _ :limit _ :with _}]
 => [<db> <count>]
 
-[:delete {:where <where> :order _ :offset _ :limit _}]
+[:delete <coll> {:where _ :order _ :offset _ :limit _}]
 => [<db> <count>]
 
-[:create-index {:on <index_on>}]
+[:create-index <coll> <index_on>]
 => [<db> 1]
 
-[:drop-index {:on <index_on>}]
+[:drop-index <coll> <index_on>]
 => [<db> 1]
 
-[:list-indexes]
-=> [<index_on> <index_on> <index_on>]
+[:list-indexes <coll>]
+=> [<index_on> <index_on>]
 
-[:multi-read  {:queries [<select> <count>]}]
+[:multi-read [<select> <count>]]
 => [<records> <count>]
 
-[:multi-write {:queries [<insert> <update> <delete> <index>]}]
+[:multi-write [<insert> <update> <delete> <index>]]
 => [<db> [<count> <count> <count> <count>]]
 
-[:checked-write {:check    <read_or_multi-read>
-                 :expected <expected result>
-                 :write    <write_or_multi-write>}]
+[:checked-write
+   <read_or_multi-read>
+   <expected result>
+   <write_or_multi-write>]
 => [<db> [false <actual-count>]] [<db> [true [<actual-count> <actual-records>]]]
 => [<db> [true <count>]] [<db> [true [<records> <count>]]]
 
-[:explain [:select _]]
+[:list-colls]
+
+[:explain [:select _ _]]
 => <query_plan>
 
 ; server commands and responses
@@ -52,16 +55,17 @@
 [:snapshot {:path "/foo/bar/snap1"}]
 => true
 
+
 ; todo
-collections
-convenience notation for indexes and order
 test suite
 benchmark suite
 cleanup
 announce
 
 ; ideas
-logging
+better cli module
+(debug/info) logging
+snapshotting
 compilation and distribution
 paramaterized queries
 response normalization
