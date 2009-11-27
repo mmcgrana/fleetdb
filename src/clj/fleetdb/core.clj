@@ -299,7 +299,8 @@
       (apply concat (map #(exec-plan db %) sources)))))
 
 (defmethod exec-plan :rmap-lookup [db [_ id _]]
-  (get-in db [:rmap id]))
+  (let [record (get-in db [:rmap id])]
+    (when record (list record))))
 
 (defmethod exec-plan :rmap-multilookup [db [_ ids _]]
   (if-let [rmap (:rmap db)]
@@ -473,7 +474,7 @@
       [(rmap-delete int-rmap old-record)
        (imap-delete int-imap old-record)])))
 
-(defmethod query :explain [db [_ {[query-type opts] :query}]]
+(defmethod query :explain [db [_ [query-type opts]]]
   (assert (= query-type :select))
   (let [{:keys [where order offset limit only]} opts]
     (find-plan (keys (:imap db)) where order offset limit only)))

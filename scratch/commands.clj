@@ -1,5 +1,4 @@
-; queries and associated responses
-
+; queries and responses
 [:select {:where <where> :order _ :offset _ :limit _ :only _}]
 => [<record> <record> <record>]
 
@@ -40,26 +39,25 @@
 => [<db> [false <actual-count>]] [<db> [true [<actual-count> <actual-records>]]]
 => [<db> [true <count>]] [<db> [true [<records> <count>]]]
 
-[:explain {:query [:select _]}]
+[:explain [:select _]]
 => <query_plan>
 
+; server commands and responses
 [:ping]
 => "pong"
 
+[:compact]
+=> true
+
 [:snapshot {:name "snap1"}]
-=> "snap1"
+=> true
 
-[:tag {:name "tag1"}]
-=> "tag1"
-
-[:branch {:name "branch1"}]
-=> [new-db "branch1"]
-
-
-multiple databases at server level
-server support management commands
+; todo
+proper compiled server module
 qualified indexes or tables
 benchmark suite
+logging
+bind limitations
 
 ; ideas
 paramaterized queries
