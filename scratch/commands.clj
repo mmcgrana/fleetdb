@@ -49,17 +49,20 @@
 [:compact]
 => true
 
-[:snapshot {:name "snap1"}]
+[:snapshot {:path "/foo/bar/snap1"}]
 => true
 
 ; todo
-proper compiled server module
-qualified indexes or tables
+collections
+convenience notation for indexes and order
+test suite
 benchmark suite
-logging
-bind limitations
+cleanup
+announce
 
 ; ideas
+logging
+compilation and distribution
 paramaterized queries
 response normalization
 query timeout option

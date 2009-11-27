@@ -7,7 +7,7 @@ FleetDB aims to be a fast, concurrent, flexible, and powerful main memory databa
 * A rich query interface
 * Optional durability via append-only logging
 
-FleetDB is implemented in Clojure. It stores data in main memory using persistent data structures and defines database operations in a functional style.
+FleetDB is implemented in Clojure and Java. It stores data in main memory using persistent data structures and defines database operations in a functional style.
 
 Status
 ------

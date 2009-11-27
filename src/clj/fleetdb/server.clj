@@ -1,8 +1,9 @@
 (ns fleetdb.server
   (:use     (fleetdb [util :only (def-)]))
   (:require (fleetdb [embedded :as embedded] [io :as io] [exec :as exec])
-            (clj-stacktrace [repl :as stacktrace]))
-  (:import  (java.net ServerSocket Socket)
+            (clj-stacktrace [repl :as stacktrace])
+            (clojure.contrib [command-line :as cli]))
+  (:import  (java.net ServerSocket Socket InetAddress)
             (java.io PushbackReader BufferedReader InputStreamReader
                      PrintWriter    BufferedWriter OutputStreamWriter
                      DataInputStream  BufferedInputStream
@@ -89,20 +90,31 @@
 (def- protocol-handlers
   {:binary binary-handler :text text-handler})
 
-(defn run [{:keys [port protocol threads persistent db-path]}]
-  (let [server-socket (ServerSocket. port)
+(defn run [db-path ephemral port interface threads protocol]
+  (let [inet          (InetAddress/getByName interface)
+        server-socket (ServerSocket. port 10000 inet)
         pool          (exec/init-pool threads)
         handler       (protocol-handlers protocol)
         loading       (io/exist? db-path)
-        dba           (if persistent
-                        (if loading
-                          (embedded/load-persistent db-path)
-                          (embedded/init-persistent db-path))
+        dba           (if ephemral
                         (if loading
                           (embedded/load-ephemral db-path)
-                          (embedded/init-ephemral)))]
+                          (embedded/init-ephemral))
+                        (if loading
+                          (embedded/load-persistent db-path)
+                          (embedded/init-persistent db-path)))]
     (println "FleetDB serving" (name protocol) "protocol on port" port)
     (loop []
       (let [socket (doto (.accept server-socket))]
         (exec/submit pool #(handler dba socket)))
       (recur))))
+
+(cli/with-command-line *command-line-args*
+  "FleetDB Server"
+  [[l  "Full path to database log"]
+   [e? "Do not log database changes to disk" false]
+   [p  "TCP port number to listen on" "3400"]
+   [a  "Local address to listen on" "127.0.0.1"]
+   [c  "Maximum number of threads/concurrent connections" "100"]
+   [i  "Client/server interface: one of binary or text" "binary"]]
+  (run l e? (Integer/decode p) a (Integer/decode c) (keyword i)))
