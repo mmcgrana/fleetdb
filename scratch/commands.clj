@@ -57,7 +57,6 @@
 
 
 ; todo
-test planner
 test index usage and maintanence
 test embedded
 test server

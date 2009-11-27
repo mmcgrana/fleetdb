@@ -218,7 +218,7 @@
         (sort-plan order))
 
     (= (get where 0) :or)
-      [:union order (map #(where-order-plan ispecs % order) (next where))]
+      [:union order (map #(where-order-plan coll ispecs % order) (next where))]
 
     :else
       (where-order-plan* coll ispecs where order)))
@@ -350,10 +350,12 @@
           (vals base-rl)))]
       (indexed-flatten indexeds)))
 
+(defn- coll-ispecs [db coll]
+  (keys (get-in db [:imaps coll])))
+
 (defn- find-records [db coll {:keys [where order offset limit only]}]
   (exec-plan db
-    (find-plan coll (keys (get-in db [:imaps coll]))
-      where order offset limit only)))
+    (find-plan coll (coll-ispecs db coll) where order offset limit only)))
 
 
 ;; RMap and IMap manipulation
@@ -476,7 +478,7 @@
 (defmethod query :explain [db [_ [query-type coll opts]]]
   (assert (= query-type :select))
   (let [{:keys [where order offset limit only]} opts]
-    (find-plan coll (get-in db [:ispecs coll]) where order offset limit only)))
+    (find-plan coll (coll-ispecs db coll) where order offset limit only)))
 
 (defmethod query :list-colls [db _]
   (set
