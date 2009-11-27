@@ -8,6 +8,7 @@ public class Compare {
   static final Keyword NEG_INF = Keyword.intern(null, "neg-inf");
   static final Keyword POS_INF = Keyword.intern(null, "pos-inf");  
   
+  @SuppressWarnings("unchecked")
   public static int compare(Object a, Object b) {
     if (a == b) {
       return 0;
@@ -22,7 +23,7 @@ public class Compare {
     } else if (a instanceof Number) {
       return Numbers.compare((Number) a, (Number) b);
     } else {
-      return ((APersistentVector) a).compareTo(b);
+      return ((Comparable) a).compareTo((Comparable) b);
     }
   }
 }

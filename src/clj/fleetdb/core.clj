@@ -232,7 +232,7 @@
 (defn- only-plan [source only]
   (if only [:only only source] source))
 
-(defn find-plan [coll ispecs where order offset limit only]
+(defn- find-plan [coll ispecs where order offset limit only]
   (-> (where-order-plan coll ispecs where order)
    (offset-plan offset)
    (limit-plan  limit)
@@ -468,7 +468,7 @@
          (imap-update int-imap old-record new-record)]))))
 
 (defmethod query :delete [db [_ coll opts]]
-  (db-apply db (find-records db coll opts)
+  (db-apply db coll (find-records db coll opts)
     (fn [[int-rmap int-imap] old-record]
       [(rmap-delete int-rmap old-record)
        (imap-delete int-imap old-record)])))
@@ -476,7 +476,7 @@
 (defmethod query :explain [db [_ [query-type coll opts]]]
   (assert (= query-type :select))
   (let [{:keys [where order offset limit only]} opts]
-    (find-plan (get-in db [:ispecs coll]) where order offset limit only)))
+    (find-plan coll (get-in db [:ispecs coll]) where order offset limit only)))
 
 (defmethod query :list-colls [db _]
   (set
@@ -497,7 +497,7 @@
     [(core/dissoc-in db [:imaps coll ispec]) 1]))
 
 (defmethod query :list-indexes [db [_ coll]]
-  (keys (get-in db [:impas coll])))
+  (keys (get-in db [:imaps coll])))
 
 (defmethod query :multi-read [db [_ queries]]
   (vec (map #(query db %) queries)))
@@ -505,7 +505,7 @@
 (defmethod query :multi-write [db [_ queries]]
   (reduce
     (fn [[int-db int-results] q]
-      (let [[aug-db result] (query int-db query)]
+      (let [[aug-db result] (query int-db q)]
         [aug-db (conj int-results result)]))
     [db []]
     queries))
