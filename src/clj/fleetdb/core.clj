@@ -9,48 +9,54 @@
 (def- pos-inf :pos-inf)
 
 (defn- record-compare [order]
-  (let [[[attr dir] & rorder] order]
-    (if (not rorder)
+  (if (= 1 (count order))
+    (let [[attr dir] (first order)]
       (cond
         (= dir :asc)
           #(Compare/compare (attr %1) (attr %2))
         (= dir :desc)
           #(Compare/compare (attr %2) (attr %1))
         :else
-          (raise ("invalid order " order)))
-      (let [rcompare (record-compare rorder)]
-        (cond
-          (= dir :asc)
-            #(let [c (Compare/compare (attr %1) (attr %2))] (if (zero? c) (rcompare %1 %2) c))
-          (= dir :desc)
-            #(let [c (Compare/compare (attr %2) (attr %1))] (if (zero? c) (rcompare %1 %2) c))
-          :else
-            (raise "invalid order " order))))))
+          (raise "invalid order " order)))
+    (let [[[attr dir] & rorder] order
+          rcompare              (record-compare rorder)]
+      (cond
+        (= dir :asc)
+          #(let [c (Compare/compare (attr %1) (attr %2))]
+             (if (zero? c) (rcompare %1 %2) c))
+        (= dir :desc)
+          #(let [c (Compare/compare (attr %2) (attr %1))]
+             (if (zero? c) (rcompare %1 %2) c))
+        :else
+          (raise "invalid order " order)))))
 
 (defn- attr-compare [order]
-  (let [[[attr dir] & rorder] order]
-    (if (not rorder)
+  (if (= 1 (count order))
+    (let [[attr dir] (first order)]
       (cond
         (= dir :asc)
           #(Compare/compare %1 %2)
         (= dir :desc)
           #(Compare/compare %2 %1)
         :else
-          (raise (str "invalid order " order)))
-      (let [rcompare (attr-compare rorder)]
-        (cond
-          (= dir :asc)
-            #(let [c (Compare/compare (first %1) (first %2))]
-               (if (zero? c)
-                 (rcompare (rest %1) (rest %2))
+          (raise "invalid order " order)))
+    (let [[[attr dir] & rorder] order
+          rcompare (attr-compare rorder)
+          next-fn  (if (= 1 (count rorder)) #(first (rest %)) rest)]
+      (cond
+        (= dir :asc)
+          #(let [c (Compare/compare (first %1) (first %2))]
+             (if (zero? c)
+               (rcompare (next-fn %1) (next-fn %2))
+               c))
+        (= dir :desc)
+          #(let [c (Compare/compare (first %1) (first %2))]
+             (if (zero? c)
+               (rcompare (next-fn %1) (next-fn %2))
                  c))
-          (= dir :desc)
-            #(let [c (Compare/compare (first %1) (first %2))]
-               (if (zero? c)
-                 (rcompare (rest %1) (rest %2))
-                   c))
-          :else
-            (raise "invalid order " order))))))
+        :else
+          (raise "invalid order " order)))))
+
 
 ;; Find planning
 
@@ -168,16 +174,16 @@
         (cond
           (eq-op? cop)
             (if (contains? eq cattr)
-              (raise (str "duplicate equality on " cattr))
+              (raise "duplicate equality on " cattr)
               [(assoc eq cattr [cval acond]) ineq other])
           (ineq-op? cop)
             (if (contains? ineq cattr)
-              (raise (str "duplicate inequality on " cattr))
+              (raise "duplicate inequality on " cattr)
               [eq (assoc ineq cattr [(cond-low-high cop cval) acond]) other])
           (other-op? cop)
             [eq ineq (conj other acond)]
           :else
-            (raise (str "invalid where " acond)))))
+            (raise "invalid where " acond))))
     [{} {} []]
     conds))
 
@@ -275,7 +281,7 @@
         (fn [record]
           (contains? aval-set (attr record))))
     :else
-      (raise (str "where op " op " not recognized"))))
+      (raise "where op " op " not recognized")))
 
 (defmulti- exec-plan (fn [db [plan-type _]] plan-type))
 
@@ -325,7 +331,7 @@
           :single  (cons f r))))))
 
 (defmethod exec-plan :index-lookup [db [_ [coll ispec val]]]
-  (indexed-flatten1 (get-in db [:imap ispec val])))
+  (indexed-flatten1 (get-in db [:imaps coll ispec val])))
 
 (defmethod exec-plan :index-seq
   [db [_ [coll ispec sdir left-val left-inc right-val right-inc]]]
@@ -353,7 +359,8 @@
 (defn- coll-ispecs [db coll]
   (keys (get-in db [:imaps coll])))
 
-(defn- find-records [db coll {:keys [where order offset limit only]}]
+(defn- find-records [db coll {:keys [where order offset limit only] :as opts}]
+  (assert (or (nil? opts) (map? opts)))
   (exec-plan db
     (find-plan coll (coll-ispecs db coll) where order offset limit only)))
 
@@ -375,7 +382,7 @@
 (defn- ispec-on-fn [ispec]
   (let [attrs (map first ispec)]
     (cond
-      (empty? attrs)      (raise (str "empty ispec: " ispec))
+      (empty? attrs)      (raise "empty ispec: " ispec)
       (= 1 (count attrs)) (first attrs)
       :multi-attr         #(vec (map % attrs)))))
 
@@ -432,7 +439,7 @@
 (defmulti query (fn [db [query-type opts]] query-type))
 
 (defmethod query :default [_ [query-type]]
-  (raise (str "invalid query type: " query-type)))
+  (raise "invalid query type: " query-type))
 
 (defmethod query :select [db [_ coll opts]]
   (find-records db coll opts))

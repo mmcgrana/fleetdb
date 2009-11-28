@@ -57,8 +57,6 @@
 
 
 ; todo
-test index usage and maintanence
-test server
 benchmark suite
 cleanup
 announce

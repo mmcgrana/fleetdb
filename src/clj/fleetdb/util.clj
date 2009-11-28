@@ -18,8 +18,8 @@
 (defn ? [val]
   (if val true false))
 
-(defn raise [#^String msg]
-  (throw (Exception. msg)))
+(defn raise [& msg]
+  (throw (Exception. (apply str msg))))
 
 (defalias def- defvar-)
 

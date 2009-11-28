@@ -23,7 +23,7 @@ public class Compare {
     } else if (a instanceof Number) {
       return Numbers.compare((Number) a, (Number) b);
     } else {
-      return ((Comparable) a).compareTo((Comparable) b);
+      return ((Comparable) a).compareTo(b);
     }
   }
 }

@@ -1,6 +1,6 @@
 (ns fleetdb.core-test
   (:require (fleetdb [core :as core]))
-  (:use (clj-unit core) (fleetdb [util :only (def-)])))
+  (:use (clj-unit core) (fleetdb test-util [util :only (def-)])))
 
 (def- db1
   (let [coll    :elems
@@ -8,6 +8,20 @@
                  {:id 4 :lt "e"} {:id 5 :lt "f"} {:id 6 :lt "d"}]
         empty   (core/init)]
     (first (core/query empty [:insert coll records]))))
+
+(def- db2
+  (let [coll    :elems
+        records [{:id 1 :lt "a" :num 1 :tp :a}
+                 {:id 2 :lt "c" :num 4 :tp :a}
+                 {:id 3 :lt "a" :num 2 :tp :a}
+                 {:id 4 :lt "d" :num 2 :tp :b}]
+        ispecs  [[[:lt :asc]] [[:num :asc] [:tp :asc]]]
+        empty   (core/init)
+        with-rs (first (core/query empty [:insert coll records]))
+        with-is (reduce #(first (core/query %1 [:create-index coll %2]))
+                        with-rs
+                        ispecs)]
+    with-is))
 
 (deftest "init"
   (assert= {:rmaps {} :imaps {}} (core/init)))
@@ -45,11 +59,29 @@
            (core/query db1
              [:select :elems {:where [:in :id [4 2]] :only [:lt]}])))
 
+(deftest "select: simple index get"
+  (assert-set= [1 3] (map :id (core/query db2
+                                [:select :elems {:where [:= :lt "a"]}]))))
+
+(deftest "select: simple index range"
+  (assert-set= [2 4] (map :id (core/query db2
+                                [:select :elems {:where [:>= :lt "c"]}]))))
+
+(deftest "select: compound index get"
+  (assert-set= [3]
+               (map :id (core/query db2
+                 [:select :elems {:where [:and [:= :num 2] [:= :tp :a]]}]))))
+
+(deftest "select: compound index range"
+  (assert-set= [3 4]
+               (map :id (core/query db2
+                 [:select :elems {:where [:and [:= :num 2] [:>= :tp :a]]}]))))
+
 (deftest "get: no coll"
   (assert-nil (core/query db1 [:get :foos 7])))
 
 (deftest "get: present"
-  (assert= {:id 2 :lt "c"} (core/query db1 [:get :elems 2])))
+  (assert-set= [1 3] (map :id (core/query db1 [:get :elems [1 3]]))))
 
 (deftest "get: not present"
   (assert-nil (core/query db1 [:get :elems 100])))
