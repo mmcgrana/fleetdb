@@ -1,57 +1,54 @@
 (set! *warn-on-reflection* true)
 
-(require '(fleetdb [embedded :as embedded] [core :as core]))
-(import '(com.yourkit.api Controller ProfilingModes))
-
-(defn records [n]
-  (for [x (range n)]
-    {:id         (+ x 10000000)
-     :created-at (+ x 20000000)
-     :updated-at (+ x 30000000)
-     :title      (str x "is the best number ever")}))
+(ns scratch.bench-embedded
+  (:require (fleetdb [embedded :as embedded] [io :as io])
+            (scratch [bench-util :as bench])))
 
 (defn record-ids [n]
   (map #(+ 10000000 %) (range n)))
 
-(defn nano-time []
-  (System/nanoTime))
-
-(defn timed [f]
-  (f)
-  (let [t-start (nano-time)
-        res     (f)
-        t-end   (nano-time)]
-   (double (/ (- t-end t-start) 1000000000))))
-
-(defn profiled [body]
-  (body)
-  (let [profiler (Controller.)]
-    (.startCPUProfiling profiler
-      ProfilingModes/CPU_TRACING
-      Controller/DEFAULT_FILTERS
-      Controller/DEFAULT_WALLTIME_SPEC)
-    (body)
-    (.captureSnapshot profiler ProfilingModes/SNAPSHOT_WITHOUT_HEAP)
-    (.stopCPUProfiling profiler)
-    :profiled))
+(defn records [n]
+  (for [i (record-ids n)]
+    {:id         i
+     :created-at (+ i 10000000)
+     :updated-at (+ i 20000000)
+     :title      (str i "is the best number ever")}))
 
 (def n 1000000)
+(def k 100)
+(def db-log-path "/tmp/fleetdb-bench-embedded")
+
+(defn- build [label initialize]
+  ;(bench/timed label
+  (bench/profiled
+    #(let [dba (initialize)]
+       (doseq [record (records n)]
+         (embedded/query dba [:insert :elems record]))
+       (embedded/close dba))))
+
+(defn- chunked-build [label initialize]
+  (bench/timed label
+    #(let [dba (initialize)]
+       (doseq [record-chunk (partition k (records n))]
+         (embedded/query dba [:insert :elems (vec record-chunk)]))
+       (embedded/close dba))))
 
 (println "-- embedded")
 (println "n =" n)
+(println "k =" k)
 
-(println "1-by-1 build:  "
-  (timed
-    #(let [dba (embedded/init)]
-       (doseq [r-seq (partition 1 (records n))]
-         (embedded/query dba [:insert {:records r-seq}]))
-       (embedded/close dba))))
+(build         "build ephemral:          "
+               embedded/init-ephemral)
+(chunked-build "chunked build ephemral:  "
+               embedded/init-ephemral)
 
-(println "get sequential:"
-  (let [dba (embedded/init)]
-    (embedded/query dba [:insert {:records (records n)}])
-    (timed
-      #(do
-         (doseq [id (record-ids n)]
-           (doall (query dba [:select {:where [:= :id id]}])))
-         (embedded/close dba)))))
+(io/rm db-log-path)
+(build         "build persistent:        "
+               #(embedded/init-persistent db-log-path))
+(chunked-build "chunked build persistent:"
+               #(embedded/init-persistent db-log-path))
+
+
+
+
+

@@ -19,7 +19,7 @@
   (if val true false))
 
 (defn raise [& msg]
-  (throw (Exception. (apply str msg))))
+  (throw (Exception. #^String (apply str msg))))
 
 (defalias def- defvar-)
 
