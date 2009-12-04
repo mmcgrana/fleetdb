@@ -7,6 +7,9 @@
 (defn init-pool [size]
   (Executors/newFixedThreadPool size))
 
+(defn cores []
+  (.. Runtime getRuntime availableProcessors))
+
 (defn submit [#^ExecutorService executor #^Callable f]
   (.submit executor f))
 
@@ -22,9 +25,12 @@
 (defn await-termination [#^ExecutorService executor timeout-secs]
   (.awaitTermination executor timeout-secs TimeUnit/SECONDS))
 
-(defn join [executor timeout-secs]
+(defn join-executor [executor timeout-secs]
   (shutdown executor)
   (await-termination executor timeout-secs))
 
-(defn async [#^Runnable f]
-  (.start (Thread. f)))
+(defn spawn [#^Runnable f]
+  (doto (Thread. f) (.start)))
+
+(defn join [#^Thread t]
+  (.join t))

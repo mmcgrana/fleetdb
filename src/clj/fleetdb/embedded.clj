@@ -61,7 +61,7 @@
     (init* db {:write-dos write-dos :write-path read-write-path})))
 
 (defn close [dba]
-  (exec/join (:write-pipe ^dba) 60)
+  (exec/join-executor (:write-pipe ^dba) 60)
   (if-let [write-dos (:write-dos ^dba)]
     (io/dos-close write-dos))
   (assert (compare-and-set! dba @dba nil))
@@ -85,7 +85,7 @@
     #(let [tmp-path      (io/tmp-path "/tmp" "compact")
            db-comp-start @dba]
        (alter-meta! dba assoc :write-buf (ArrayList.))
-       (exec/async (fn []
+       (exec/spawn (fn []
          (write-to db-comp-start tmp-path)
          (exec/execute (:write-pipe ^dba)
            (fn []
