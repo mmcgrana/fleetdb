@@ -10,16 +10,16 @@
     :multi-write :checked-write})
 
 (defn- dba? [dba]
-  (? (:write-pipe ^dba)))
+  (? (:write-pipe (meta dba))))
 
 (defn- persistent? [dba]
-  (? (:write-dos ^dba)))
+  (? (:write-dos (meta dba))))
 
 (defn- ephemeral? [dba]
   (not (persistent? dba)))
 
 (defn- compacting? [dba]
-  (? (:write-buf ^dba)))
+  (? (:write-buf (meta dba))))
 
 (defn- replay-command [db query]
   (first (core/query db query)))
@@ -61,8 +61,8 @@
     (init* db {:write-dos write-dos :write-path read-write-path})))
 
 (defn close [dba]
-  (exec/join-executor (:write-pipe ^dba) 60)
-  (if-let [write-dos (:write-dos ^dba)]
+  (exec/join-executor (:write-pipe (meta dba)) 60)
+  (if-let [write-dos (:write-dos (meta dba))]
     (io/dos-close write-dos))
   (assert (compare-and-set! dba @dba nil))
   true)
@@ -81,19 +81,19 @@
 (defn compact [dba]
   (assert (persistent? dba))
   (assert (not (compacting? dba)))
-  (exec/execute (:write-pipe ^dba)
+  (exec/execute (:write-pipe (meta dba))
     #(let [tmp-path      (io/tmp-path "/tmp" "compact")
            db-comp-start @dba]
        (alter-meta! dba assoc :write-buf (ArrayList.))
        (exec/spawn (fn []
          (write-to db-comp-start tmp-path)
-         (exec/execute (:write-pipe ^dba)
+         (exec/execute (:write-pipe (meta dba))
            (fn []
              (let [dos (io/dos-init tmp-path)]
-               (doseq [post-comp-command (:write-buf ^dba)]
+               (doseq [post-comp-command (:write-buf (meta dba))]
                  (io/dos-write dos post-comp-command))
-               (io/mv tmp-path (:write-path ^dba))
-               (io/dos-close (:write-dos ^dba))
+               (io/mv tmp-path (:write-path (meta dba)))
+               (io/dos-close (:write-dos (meta dba)))
                (alter-meta! dba dissoc :write-buf)
                (alter-meta! dba assoc  :write-dos dos))))))
        true)))
@@ -101,12 +101,12 @@
 (defn query [dba [query-type :as q]]
   (assert (dba? dba))
   (if (write-query-type? query-type)
-    (exec/execute (:write-pipe ^dba)
+    (exec/execute (:write-pipe (meta dba))
       #(let [old-db          @dba
              [new-db result] (core/query old-db q)]
-         (when-let [write-dos (:write-dos ^dba)]
+         (when-let [write-dos (:write-dos (meta dba))]
            (io/dos-write write-dos q)
-           (when-let [#^ArrayList write-buf (:write-buf ^dba)]
+           (when-let [#^ArrayList write-buf (:write-buf (meta dba))]
              (.add write-buf q)))
          (assert (compare-and-set! dba old-db new-db))
          result))
