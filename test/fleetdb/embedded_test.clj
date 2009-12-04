@@ -14,15 +14,15 @@
 (def- snapshot-path "/tmp/fleetdb-snapshot")
 (def- log-path      "/tmp/fleetdb-log")
 
-(deftest "ephemral lifecycle"
-  (with-dba [dba-0 (embedded/init-ephemral)]
+(deftest "ephemeral lifecycle"
+  (with-dba [dba-0 (embedded/init-ephemeral)]
     (assert-that dba-0)
     (embedded/query dba-0 [:insert :elems [{:id 1} {:id 2}]])
     (assert= 2 (embedded/query dba-0 [:count :elems]))
     (embedded/query dba-0 [:create-index :elems [[:name :asc]]])
     (embedded/snapshot dba-0 snapshot-path)
     (embedded/query dba-0 [:insert :elems {:id 3}]))
-  (with-dba [dba-1 (embedded/load-ephemral snapshot-path)]
+  (with-dba [dba-1 (embedded/load-ephemeral snapshot-path)]
     (assert= 2 (embedded/query dba-1 [:count :elems]))
     (assert= [[[:name :asc]]] (embedded/query dba-1 [:list-indexes :elems]))
     (with-dba [dba-2 (embedded/fork dba-1)]

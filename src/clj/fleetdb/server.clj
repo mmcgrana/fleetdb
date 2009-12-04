@@ -90,16 +90,16 @@
 (def- protocol-handlers
   {:binary binary-handler :text text-handler})
 
-(defn run [db-path ephemral port interface threads protocol]
+(defn run [db-path ephemeral port interface threads protocol]
   (let [inet          (InetAddress/getByName interface)
         server-socket (ServerSocket. port 10000 inet)
         pool          (exec/init-pool threads)
         handler       (protocol-handlers protocol)
         loading       (and db-path (io/exist? db-path))
-        dba           (if ephemral
+        dba           (if ephemeral
                         (if loading
-                          (embedded/load-ephemral db-path)
-                          (embedded/init-ephemral))
+                          (embedded/load-ephemeral db-path)
+                          (embedded/init-ephemeral))
                         (if loading
                           (embedded/load-persistent db-path)
                           (embedded/init-persistent db-path)))]

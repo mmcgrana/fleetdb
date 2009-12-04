@@ -15,7 +15,7 @@
 (defn- persistent? [dba]
   (? (:write-dos ^dba)))
 
-(defn- ephemral? [dba]
+(defn- ephemeral? [dba]
   (not (persistent? dba)))
 
 (defn- compacting? [dba]
@@ -44,10 +44,10 @@
 (defn- init* [db & [other-meta]]
   (atom db :meta (assoc other-meta :write-pipe (exec/init-pipe))))
 
-(defn init-ephemral []
+(defn init-ephemeral []
   (init* (core/init)))
 
-(defn load-ephemral [read-path]
+(defn load-ephemeral [read-path]
   (init* (read-from read-path)))
 
 (defn init-persistent [write-path]
@@ -64,14 +64,15 @@
   (exec/join (:write-pipe ^dba) 60)
   (if-let [write-dos (:write-dos ^dba)]
     (io/dos-close write-dos))
+  (assert (compare-and-set! dba @dba nil))
   true)
 
 (defn fork [dba]
-  (assert (ephemral? dba))
+  (assert (ephemeral? dba))
   (init* @dba))
 
 (defn snapshot [dba snapshot-path]
-  (assert (ephemral? dba))
+  (assert (ephemeral? dba))
   (let [tmp-path  (io/tmp-path "/tmp" "snapshot")]
     (write-to @dba tmp-path)
     (io/mv tmp-path snapshot-path)
