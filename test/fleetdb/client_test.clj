@@ -21,7 +21,7 @@
   (with-test-client client
     (let [[c e] (client/query client [:foo])]
       (assert= c 1)
-      (assert-match #"invalid query" e))))
+      (assert-match #"Invalid query" e))))
 
 (deftest "valid query"
   (with-test-client client

@@ -1,13 +1,6 @@
-FleetDB aims to be a fast, concurrent, flexible, and powerful main memory database. It will feature:
+FleetDB is a document-oriented, persistent, main-memory database.
 
-* A document-oriented data model
-* Dynamic indexes to efficiently answer queries
-* Full snapshot isolation for concurrent readers
-* Atomic multi-document updates
-* A rich query interface
-* Optional durability via append-only logging
-
-FleetDB is implemented in Clojure and Java. It stores data in main memory using persistent data structures and defines database operations in a functional style.
+FleetDB combines the flexibility of schema-less documents with the indexing and querying capabilities of traditional databases. In-memory functional data structures provide high performance and excellent concurrency characteristics while append-only logging to disk provides full persistence.
 
 Status
 ------

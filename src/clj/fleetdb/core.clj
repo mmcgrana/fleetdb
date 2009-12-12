@@ -1,7 +1,9 @@
 (ns fleetdb.core
-  (:import (clojure.lang Numbers Sorted) (fleetdb Compare))
-  (:use (fleetdb util))
-  (:require (clojure [set :as set]) (clojure.contrib [core :as core])))
+  (:import (clojure.lang Numbers Sorted IDeref)
+           (fleetdb Compare))
+  (:require (clojure [set :as set])
+            (clojure.contrib [core :as core]))
+  (:use (fleetdb util)))
 
 ;; General ordering
 
@@ -9,6 +11,7 @@
 (def- pos-inf :pos-inf)
 
 (defn- record-compare [order]
+  (assert order)
   (if (= 1 (count order))
     (let [[attr dir] (first order)]
       (cond
@@ -67,7 +70,7 @@
   (if order [:sort order source] source))
 
 (defn- rmap-scan-plan [coll where order]
-  (-> [:rmap-scan coll]
+  (-> [:record-scan coll]
     (filter-plan where)
     (sort-plan order)))
 
@@ -217,10 +220,10 @@
 (defn- where-order-plan [coll ispecs where order]
   (cond
     (and (= (get where 0) :=) (= (get where 1) :id))
-      [:rmap-lookup [coll (get where 2)]]
+      [:record-lookup [coll (get where 2)]]
 
     (and (= (get where 0) :in) (= (get where 1) :id))
-      (-> [:rmap-multilookup [coll (get where 2)]]
+      (-> [:record-multilookup [coll (get where 2)]]
         (sort-plan order))
 
     (= (get where 0) :or)
@@ -251,10 +254,18 @@
   {:and and? :or or?})
 
 (def- sing-op-fns
-  {:= = :!= != :< < :<= <= :> > :>= >=})
+  {:=  #(Compare/eq  %1 %2)
+   :!= #(Compare/neq %1 %2)
+   :<  #(Compare/lt  %1 %2)
+   :<= #(Compare/lte %1 %2)
+   :>  #(Compare/gt  %1 %2)
+   :>= #(Compare/gte %1 %2)})
 
 (def- doub-op-fns
-  {:>< [> <] :>=< [>= <] :><= [> <=] :>=<= [>= <=]})
+  {:><   [(sing-op-fns :> ) (sing-op-fns :< )]
+   :>=<  [(sing-op-fns :>=) (sing-op-fns :< )]
+   :><=  [(sing-op-fns :> ) (sing-op-fns :<=)]
+   :>=<= [(sing-op-fns :>=) (sing-op-fns :<=)]})
 
 (defn- where-pred [[op & wrest]]
   (cond
@@ -298,22 +309,28 @@
   (take limit (exec-plan db source)))
 
 (defmethod exec-plan :only [db [_ only source]]
-  (map #(select-keys % only) (exec-plan db source)))
+  (cond
+    (vector? only)
+      (map (fn [r] (vec-map #(% r) only)) (exec-plan db source))
+    (keyword? only)
+      (map only (exec-plan db source))
+    :other
+      (raise "Unrecognized :only value: " only)))
 
 (defmethod exec-plan :union [db [_ order sources]]
   (uniq
-    (sort (record-compare order)
+    (sort (record-compare (or order [[:id :asc]]))
       (apply concat (map #(exec-plan db %) sources)))))
 
-(defmethod exec-plan :rmap-lookup [db [_ [coll id]]]
+(defmethod exec-plan :record-lookup [db [_ [coll id]]]
   (if-let [record (get-in db [:rmaps coll id])]
     (list record)))
 
-(defmethod exec-plan :rmap-multilookup [db [_ [coll ids]]]
+(defmethod exec-plan :record-multilookup [db [_ [coll ids]]]
   (if-let [rmap (get-in db [:rmaps coll])]
     (compact (map #(rmap %) ids))))
 
-(defmethod exec-plan :rmap-scan [db [_ coll]]
+(defmethod exec-plan :record-scan [db [_ coll]]
   (vals (get-in db [:rmaps coll])))
 
 (defn- indexed-flatten1 [indexed]
@@ -326,9 +343,9 @@
     (when-let [iseq (seq indexeds)]
       (let [f (first iseq) r (rest iseq)]
         (cond
-          (nil? f) r
-          (set? f) (concat f r)
-          :single  (cons f r))))))
+          (nil? f) (indexed-flatten r)
+          (set? f) (concat f (indexed-flatten r))
+          :single  (cons f (indexed-flatten r)))))))
 
 (defmethod exec-plan :index-lookup [db [_ [coll ispec val]]]
   (indexed-flatten1 (get-in db [:imaps coll ispec val])))
@@ -343,16 +360,16 @@
                         base
                         (rest base))
               base-lr (if right-inc
-                        (take-while #(<= (Compare/compare (key %) right-val) 0) base-l)
-                        (take-while #(<  (Compare/compare (key %) right-val) 0) base-l))]
+                        (take-while #(Compare/lte (key %) right-val) base-l)
+                        (take-while #(Compare/lt  (key %) right-val) base-l))]
           (vals base-lr))
         (let [base    (.seqFrom index right-val false)
               base-r  (if (or right-inc (!= (key (first base)) right-val))
                         base
                         (rest base))
               base-rl (if left-inc
-                        (take-while #(>= (Compare/compare (key %) left-val) 0) base-r)
-                        (take-while #(>  (Compare/compare (key %) left-val) 0) base-r))]
+                        (take-while #(Compare/gte (key %) left-val) base-r)
+                        (take-while #(Compare/gt  (key %) left-val) base-r))]
           (vals base-rl)))]
       (indexed-flatten indexeds)))
 
@@ -369,8 +386,10 @@
 
 (defn- rmap-insert [rmap record]
   (let [id (:id record)]
-    (assert id)
-    (assert (not (contains? rmap id)))
+    (if-not id
+      (raise "Record does not have an :id: " record))
+    (if (contains? rmap id)
+      (raise "Duplicated id: " id))
     (assoc rmap (:id record) record)))
 
 (defn- rmap-update [rmap old-record new-record]
@@ -396,7 +415,7 @@
 
 (defn- index-delete [index on-fn record]
   (let [aval    (on-fn record)
-        indexed (aval index)]
+        indexed (get index aval)]
     (update index aval
       (fn [indexed]
         (cond
@@ -439,7 +458,7 @@
 (defmulti query (fn [db [query-type opts]] query-type))
 
 (defmethod query :default [_ [query-type]]
-  (raise "invalid query type: " query-type))
+  (raise "Invalid query type: " query-type))
 
 (defmethod query :select [db [_ coll opts]]
   (find-records db coll opts))
@@ -487,11 +506,11 @@
   (let [{:keys [where order offset limit only]} opts]
     (find-plan coll (coll-ispecs db coll) where order offset limit only)))
 
-(defmethod query :list-colls [db _]
-  (set
+(defmethod query :list-collections [db _]
+  (uniq (sort
     (map first
       (filter #(not (empty? (second %)))
-              (concat (:rmaps db) (:imaps db))))))
+              (concat (:rmaps db) (:imaps db)))))))
 
 (defmethod query :create-index [db [_ coll ispec]]
   (if (get-in db [:imaps coll ispec])

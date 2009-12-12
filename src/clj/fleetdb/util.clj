@@ -1,5 +1,12 @@
 (ns fleetdb.util
-  (use (clojure.contrib def)))
+  (:require (clojure.contrib [def :as def])))
+
+(def/defalias def- def/defvar-)
+(def/defalias defmacro- def/defmacro-)
+
+(defmacro defmulti-
+  [name & decls]
+  (list* `defmulti (vary-meta name assoc :private true) decls))
 
 (defn and? [coll]
   (cond
@@ -18,23 +25,27 @@
 (defn ? [val]
   (if val true false))
 
-(defn raise [& msg]
-  (throw (Exception. #^String (apply str msg))))
+(defn- raise-excp [#^String msg]
+  (proxy [Exception] [msg]
+    (toString [] msg)))
 
-(defalias def- defvar-)
+(def- raise-excp-class
+  (class (raise-excp "")))
 
-(defmacro defmulti-
-  [name & decls]
-  (list* `defmulti (vary-meta name assoc :private true) decls))
+(defn raise [& msg-elems]
+  (throw (raise-excp (apply str msg-elems))))
+
+(defn raised? [e]
+  (= (class e) raise-excp-class))
+
+(defn update [m k f & args]
+  (assoc m k (apply f (get m k) args)))
 
 (defn merge-compact [m1 m2]
   (reduce
     (fn [m-int [k v]]
       (if (nil? v) (dissoc m-int k) (assoc m-int k v)))
     m1 m2))
-
-(defn update [m k f & args]
-  (assoc m k (apply f (get m k) args)))
 
 (defn uniq [coll]
   (lazy-seq
@@ -48,6 +59,9 @@
 (defn vec-pad [v n e]
   (let [d (- n (count v))]
     (if (zero? d) v (apply conj v (repeat d e)))))
+
+(defn vec-map [f coll]
+  (into [] (map f coll)))
 
 (defn high [comp coll]
   (if (seq coll)

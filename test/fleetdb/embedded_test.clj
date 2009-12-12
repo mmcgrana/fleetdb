@@ -1,8 +1,6 @@
 (ns fleetdb.embedded-test
   (:require (fleetdb [embedded :as embedded] [io :as io]))
-  (:use (clj-unit core)
-        (fleetdb [util :only (def-)])
-        (clojure.contrib [def :only (defmacro-)])))
+  (:use (clj-unit core) (fleetdb util)))
 
 (defmacro- with-dba [[name dba-form] & body]
   `(let [~name ~dba-form]

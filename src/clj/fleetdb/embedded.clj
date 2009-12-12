@@ -21,20 +21,18 @@
 (defn- compacting? [dba]
   (? (:write-buf (meta dba))))
 
-(defn- replay-command [db query]
-  (first (core/query db query)))
+(defn- replay-query [db q]
+  (first (core/query db q)))
 
 (defn- read-from [read-path]
-  (let [dis       (io/dis-init read-path)
-        header    (io/dis-read! dis)
-        commands  (io/dis-seq dis)
-        empty     (core/init)]
-    (reduce replay-command empty commands)))
+  (let [dis      (io/dis-init read-path)
+        queries  (io/dis-seq dis)
+        empty    (core/init)]
+    (reduce replay-query empty queries)))
 
 (defn- write-to [db write-path]
   (let [dos (io/dos-init write-path)]
-    (io/dos-write dos {:root true})
-    (doseq [coll (core/query db [:list-colls])]
+    (doseq [coll (core/query db [:list-collections])]
       (doseq [records (partition-all 100 (core/query db [:select coll]))]
         (io/dos-write dos [:insert coll (vec records)]))
       (doseq [ispec (core/query db [:list-indexes coll])]
@@ -52,7 +50,6 @@
 
 (defn init-persistent [write-path]
   (let [write-dos (io/dos-init write-path)]
-    (io/dos-write write-dos {:root true})
     (init* (core/init) {:write-dos write-dos :write-path write-path})))
 
 (defn load-persistent [read-write-path]
@@ -90,8 +87,8 @@
          (exec/execute (:write-pipe (meta dba))
            (fn []
              (let [dos (io/dos-init tmp-path)]
-               (doseq [post-comp-command (:write-buf (meta dba))]
-                 (io/dos-write dos post-comp-command))
+               (doseq [post-comp-query (:write-buf (meta dba))]
+                 (io/dos-write dos post-comp-query))
                (io/mv tmp-path (:write-path (meta dba)))
                (io/dos-close (:write-dos (meta dba)))
                (alter-meta! dba dissoc :write-buf)

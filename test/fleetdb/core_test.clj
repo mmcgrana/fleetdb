@@ -1,90 +1,226 @@
 (ns fleetdb.core-test
   (:require (fleetdb [core :as core]))
-  (:use (clj-unit core) (fleetdb test-util [util :only (def-)])))
+  (:use (clj-unit core) (fleetdb test-util [util :only (def- defmacro-)])))
 
-(def- db1
-  (let [coll    :elems
-        records [{:id 1 :lt "a"} {:id 2 :lt "c"} {:id 3 :lt "b"}
-                 {:id 4 :lt "e"} {:id 5 :lt "f"} {:id 6 :lt "d"}]
-        empty   (core/init)]
-    (first (core/query empty [:insert coll records]))))
+(defn- db-with [coll records ispecs]
+  (let [empty (core/init)
+        with-records (first (core/query empty [:insert coll records]))
+        with-indexes (reduce #(first (core/query %1 [:create-index coll %2]))
+                             with-records
+                             ispecs)]
+    with-indexes))
 
-(def- db2
-  (let [coll    :elems
-        records [{:id 1 :lt "a" :num 1 :tp :a}
-                 {:id 2 :lt "c" :num 4 :tp :a}
-                 {:id 3 :lt "a" :num 2 :tp :a}
-                 {:id 4 :lt "d" :num 2 :tp :b}]
-        ispecs  [[[:lt :asc]] [[:num :asc] [:tp :asc]]]
-        empty   (core/init)
-        with-rs (first (core/query empty [:insert coll records]))
-        with-is (reduce #(first (core/query %1 [:create-index coll %2]))
-                        with-rs
-                        ispecs)]
-    with-is))
+(def- r1 {:id 1 :lt "a" :num 1 :tp :a})
+(def- r2 {:id 2 :lt "c" :num 4 :tp :a})
+(def- r3 {:id 3 :lt "b" :num 2 :tp :a})
+(def- r4 {:id 4 :lt "e" :num 2 :tp :b})
+(def- r5 {:id 5 :lt "f" :num 3 :tp :b})
+(def- r6 {:id 6 :lt "d" :num 3 :tp :c})
 
-(deftest "init"
-  (assert= {:rmaps {} :imaps {}} (core/init)))
+(def- records [r1 r2 r3 r4 r5 r6])
+
+(def- db1 (db-with :elems records nil))
+
+(def- db2 (db-with :elems records
+            [[[:lt :asc]] [[:num :asc] [:tp :asc]]]))
 
 (deftest "select: no coll"
   (assert-nil (core/query db1 [:select :foos])))
 
 (deftest "select: full coll"
-  (assert= (set (range 1 7))
-           (set (map :id (core/query db1 [:select :elems])))))
+  (assert-set= records (core/query db1 [:select :elems])))
 
-(deftest "select: ad-hoc sort"
-  (assert= [1 3 2 6 4 5]
-           (map :id (core/query db1 [:select :elems {:order [[:lt :asc]]}]))))
+(deftest "select: ad-hoc single attr sort"
+  (assert= [r1 r3 r2 r6 r4 r5]
+           (core/query db1 [:select :elems {:order [[:lt :asc]]}])))
+
+(deftest "select: ad-hoc multi attr sort"
+  (assert= [r2 r3 r1 r5 r4 r6]
+           (core/query db1 [:select :elems
+                             {:order [[:tp :asc] [:num :desc]]}])))
 
 (deftest "select: sort, offset, and limit"
-  (assert= [2 6 4]
-           (map :id (core/query db1
-              [:select :elems {:order [[:lt :asc]] :offset 2 :limit 3}]))))
+  (assert= [r2 r6 r4]
+           (core/query db1
+              [:select :elems {:order [[:lt :asc]] :offset 2 :limit 3}])))
 
 (deftest "select: by id"
-  (assert= [{:id 4 :lt "e"}]
+  (assert= [r4]
            (core/query db1 [:select :elems {:where [:= :id 4]}])))
 
 (deftest "select: by ids"
-  (assert= [{:id 4 :lt "e"} {:id 2 :lt "c"}]
-           (core/query db1 [:select :elems {:where [:in :id [4 100 2]]}])))
+  (assert-set= [r4 r2]
+                 (core/query db1 [:select :elems {:where [:in :id [4 100 2]]}])))
 
 (deftest "select: by simple ad-hoc pred"
-  (assert= [{:id 4 :lt "e"}]
-           (core/query db1 [:select :elems {:where [:= :lt "e"]}])))
+  (assert-set= [r4]
+                 (core/query db1 [:select :elems {:where [:= :lt "e"]}])))
 
-(deftest "select: only"
-  (assert= [{:lt "e"} {:lt "c"}]
+(deftest "select: by and predicate"
+  (assert-set= [r2 r3]
+               (core/query db1 [:select :elems
+                                 {:where [:and [:= :tp :a] [:>= :num 2]]}])))
+
+(deftest "select: by or predicate"
+  (assert= [r1 r3 r4]
+           (core/query db1 [:select :elems
+                             {:where [:or [:= :lt "a"] [:= :num 2]]}])))
+
+(deftest "select: only with array"
+  (assert= [["e"] ["c"]]
            (core/query db1
              [:select :elems {:where [:in :id [4 2]] :only [:lt]}])))
 
-(deftest "select: simple index get"
-  (assert-set= [1 3] (map :id (core/query db2
-                                [:select :elems {:where [:= :lt "a"]}]))))
+(deftest "select: only with element"
+  (assert= ["e" "c"]
+           (core/query db1
+             [:select :elems {:where [:in :id [4 2]] :only :lt}])))
 
-(deftest "select: simple index range"
-  (assert-set= [2 4] (map :id (core/query db2
-                                [:select :elems {:where [:>= :lt "c"]}]))))
+(deftest "select: only with other"
+  (assert-throws #"Unrecognized :only value"
+    (core/query db1
+      [:select :elems {:where [:in :id [4 2]] :only {:foo :bar}}])))
 
-(deftest "select: compound index get"
-  (assert-set= [3]
-               (map :id (core/query db2
-                 [:select :elems {:where [:and [:= :num 2] [:= :tp :a]]}]))))
+(deftest "explain: non-select"
+  (assert-throws #"select"
+    (core/query db1 [:explain [:list-indexes :elems]])))
 
-(deftest "select: compound index range"
-  (assert-set= [3 4]
-               (map :id (core/query db2
-                 [:select :elems {:where [:and [:= :num 2] [:>= :tp :a]]}]))))
+(deftest "explain: select"
+  (assert= [:record-lookup [:elems 3]]
+           (core/query db1 [:explain [:select :elems {:where [:= :id 3]}]])))
 
-(deftest "get: no coll"
-  (assert-nil (core/query db1 [:get :foos 7])))
+(defn assert-find [opts plan1-expected & [plan2-expected]]
+  (let [plan1-actual (core/query db1 [:explain [:select :elems opts]])
+        plan2-actual (core/query db2 [:explain [:select :elems opts]])]
+    (assert= plan1-expected plan1-actual)
+    (assert= (or plan2-expected plan1-expected) plan2-actual)
+    (let [res1-actual (core/query db1 [:select :elems opts])
+          res2-actual (core/query db2 [:select :elems opts])]
+      (if (:order opts)
+        (assert= res1-actual res2-actual)
+        (assert-set= res1-actual res2-actual)))))
 
-(deftest "get: present"
-  (assert-set= [1 3] (map :id (core/query db1 [:get :elems [1 3]]))))
+(deftest "find: no conditions"
+  (assert-find nil
+    [:record-scan :elems]))
 
-(deftest "get: not present"
-  (assert-nil (core/query db1 [:get :elems 100])))
+(deftest "find: one id"
+  (assert-find {:where [:= :id 2]}
+    [:record-lookup [:elems 2]]))
+
+(deftest "find: many ids"
+  (assert-find {:where [:in :id [2 3 4]]}
+    [:record-multilookup [:elems [2 3 4]]]))
+
+(deftest "find: many ids with order"
+  (assert-find
+    {:where [:in :id [2 3 4]] :order [[:lt :asc]]}
+    [:sort [[:lt :asc]]
+      [:record-multilookup [:elems [2 3 4]]]]))
+
+(deftest "find: many opts"
+  (assert-find
+    {:where [:= :tp :a] :order [[:lt :asc]] :limit 3 :offset 6 :only [:id :lt]}
+    [:only [:id :lt]
+       [:limit 3
+         [:offset 6
+           [:sort [[:lt :asc]]
+             [:filter [:= :tp :a]
+               [:record-scan :elems]]]]]]
+    [:only [:id :lt]
+       [:limit 3
+         [:offset 6
+           [:filter [:= :tp :a]
+             [:index-seq [:elems [[:lt :asc]]
+                          :left-right :neg-inf true :pos-inf true]]]]]]))
+
+(deftest "find: union"
+   (assert-find {:where [:or [:= :lt "a"] [:= :num 2]] :order [[:tp :asc]]}
+     [:union [[:tp :asc]]
+       [[:sort [[:tp :asc]]
+          [:filter [:= :lt "a"]
+            [:record-scan :elems]]]
+        [:sort [[:tp :asc]]
+          [:filter [:= :num 2]
+            [:record-scan :elems]]]]]
+     [:union [[:tp :asc]]
+       [[:sort [[:tp :asc]]
+          [:index-lookup [:elems [[:lt :asc]] "a"]]]
+        [:index-seq [:elems [[:num :asc] [:tp :asc]]
+                       :left-right [2 :neg-inf] true [2 :pos-inf] true]]]]))
+
+(deftest "find: attr equality"
+  (assert-find {:where [:= :lt "a"]}
+    [:filter [:= :lt "a"]
+      [:record-scan :elems]]
+    [:index-lookup [:elems [[:lt :asc]] "a"]]))
+
+(deftest "find: attr range"
+  (assert-find {:where [:> :lt "c"]}
+    [:filter [:> :lt "c"]
+      [:record-scan :elems]]
+    [:index-seq [:elems [[:lt :asc]] :left-right "c" false :pos-inf true]]))
+
+(deftest "find: attr equality when index obscured"
+  (assert-find {:where [:= :tp :a]}
+    [:filter [:= :tp :a]
+      [:record-scan :elems]]))
+
+(deftest "find: multi-attr equality"
+  (assert-find {:where [:and [:= :num 2] [:= :tp :a]]}
+    [:filter [:and [:= :num 2] [:= :tp :a]]
+      [:record-scan :elems]]
+    [:index-lookup [:elems [[:num :asc] [:tp :asc]] [2 :a]]]))
+
+(deftest "find: multi-attr range"
+  (assert-find {:where [:and [:= :num 2] [:>= :tp :a]]}
+    [:filter [:and [:= :num 2] [:>= :tp :a]]
+      [:record-scan :elems]]
+    [:index-seq [:elems [[:num :asc] [:tp :asc]]
+                   :left-right [2 :a] true [2 :pos-inf] true]]))
+
+(deftest "find: index order left right"
+  (assert-find {:order [[:lt :asc]]}
+    [:sort [[:lt :asc]]
+      [:record-scan :elems]]
+    [:index-seq [:elems [[:lt :asc]] :left-right :neg-inf true :pos-inf true]]))
+
+(deftest "find: index order right left"
+  (assert-find {:order [[:lt :desc]]}
+    [:sort [[:lt :desc]]
+      [:record-scan :elems]]
+    [:index-seq [:elems [[:lt :asc]] :right-left :neg-inf true :pos-inf true]]))
+
+(deftest "find: index order trailing attrs"
+  (assert-find {:where [:= :tp :a] :order [[:num :desc]]}
+    [:sort [[:num :desc]]
+      [:filter [:= :tp :a]
+        [:record-scan :elems]]]
+    [:filter [:= :tp :a]
+      [:index-seq [:elems [[:num :asc] [:tp :asc]]
+                     :right-left [:neg-inf :neg-inf] true [:pos-inf :pos-inf] true]]]))
+
+(deftest "find: index lookup and order"
+  (assert-find {:where [:= :num 2] :order [[:tp :desc]]}
+    [:sort [[:tp :desc]]
+      [:filter [:= :num 2]
+        [:record-scan :elems]]]
+    [:index-seq [:elems [[:num :asc] [:tp :asc]]
+                  :right-left [2 :neg-inf] true [2 :pos-inf] true]]))
+
+(deftest "find: index lookup with remnant filter"
+  (assert-find {:where [:and [:> :lt "b"] [:= :tp :a]]}
+    [:filter [:and [:> :lt "b"] [:= :tp :a]]
+      [:record-scan :elems]]
+    [:filter [:= :tp :a]
+      [:index-seq [:elems [[:lt :asc]] :left-right "b" false :pos-inf true]]]))
+
+(deftest "find: index most useful"
+  (assert-find {:where [:and [:= :lt "a"] [:= :num 1] [:= :tp :a]]}
+    [:filter [:and [:= :lt "a"] [:= :num 1] [:= :tp :a]]
+      [:record-scan :elems]]
+    [:filter [:= :lt "a"]
+      [:index-lookup [:elems [[:num :asc] [:tp :asc]] [1 :a]]]]))
 
 (deftest "count: empty"
   (assert= 0 (core/query db1 [:count :foos])))
@@ -95,26 +231,40 @@
 (deftest "count: qualified"
   (assert= 3 (core/query db1 [:count :elems {:limit 3}])))
 
+(deftest "get: no coll"
+  (assert-nil (core/query db1 [:get :foos 7])))
+
+(deftest "get: present"
+  (assert-set= [r1 r3] (core/query db1 [:get :elems [1 3]])))
+
+(deftest "get: not present"
+  (assert-nil (core/query db1 [:get :elems 100])))
+
 (deftest "insert: one"
-  (let [elem        {:id 7 :lt "g"}
-        [new-db1 c] (core/query db1 [:insert :elems elem])]
+  (let [[new-db1 c] (core/query db1 [:insert :elems {:id 7}])]
     (assert= 1 c)
-    (assert= elem (core/query new-db1 [:get :elems 7]))))
+    (assert= {:id 7} (core/query new-db1 [:get :elems 7]))))
 
 (deftest "insert: multiple"
-  (let [elems       [{:id 7 :lt "g"} {:id 8 :lt "h"}]
-        [new-db1 c] (core/query db1 [:insert :elems elems])]
+  (let [[new-db1 c] (core/query db1 [:insert :elems [{:id 7} {:id 8}]])]
     (assert= 2 c)
-    (assert= (first elems) (core/query new-db1 [:get :elems 7]))))
+    (assert= {:id 7} (core/query new-db1 [:get :elems 7]))))
 
-(deftest "insert: duplicate id"
-  (assert-throws #"id"
-    (core/query db1 [:insert :elems {:id 2 :lt "f"}])))
+(deftest "insert: no id"
+  (assert-throws #"Record does not have an :id"
+    (core/query db1 [:insert :elems {:lt "g"}])))
+
+(deftest "insert: duplicated existing id"
+  (assert-throws #"Duplicated id"
+    (core/query db1 [:insert :elems {:id 2}])))
+
+(deftest "insert: duplicated given ids"
+  (assert-throws #"Duplicated id"
+    (core/query db1 [:insert :elems [{:id 1} {:id 1}]])))
 
 (deftest "insert: new coll"
-  (let [foo         {:id 7 :lt "f"}
-        [new-db1 c] (core/query db1 [:insert :foos foo])]
-    (assert= foo (core/query new-db1 [:get :foos 7]))))
+  (let [[new-db1 c] (core/query db1 [:insert :foos {:id 7}])]
+    (assert= {:id 7} (core/query new-db1 [:get :foos 7]))))
 
 (deftest "update"
   (let [[db1-1 c] (core/query db1
@@ -124,29 +274,18 @@
                          (core/query db1-1
                            [:select :elems {:where [:in :id [2 3]]}])))))
 
+(deftest "update: new indexed attribute"
+  (let [[db2-1 _] (core/query db2 [:insert :elems {:id 7}])]
+    (core/query db2-1 [:update :elems {:lt "f"} {:where [:= :id 7]}])))
+
 (deftest "delete"
   (let [[db1-1 c] (core/query db1 [:delete :elems {:where [:in :id [2 4]]}])]
     (assert= 2 c)
-    (assert= (set [1 3 5 6])
-             (set (map :id (core/query db1-1 [:select :elems]))))))
-
-(deftest "list-indexes: none"
-  (assert-nil (core/query db1 [:list-indexes :foos])))
-
-(deftest "create-/drop-index"
-  (let [[db1-1 _] (core/query db1   [:create-index :elems [[:name :asc]]])
-        [db1-2 _] (core/query db1-1 [:drop-index   :elems [[:name :asc]]])]
-    (assert= [[[:name :asc]]] (core/query db1-1 [:list-indexes :elems]))
-    (assert-nil (core/query db1-2 [:list-indexes :elems]))))
-
-(deftest "list-indexes: some"
-  (let [[db1-1 _] (core/query db1   [:create-index :elems [[:name :asc]]])
-        [db1-2 _] (core/query db1-1 [:create-index :elems [[:age :desc]]])]
-    (assert= (set [[[:name :asc]] [[:age :desc]]])
-             (set (core/query db1-2 [:list-indexes :elems])))))
+    (assert-set= [r1 r3 r5 r6]
+                 (core/query db1-1 [:select :elems]))))
 
 (deftest "multi-read"
-  (assert= [1 [{:id 4, :lt "e"} {:id 2, :lt "c"}]]
+  (assert= [1 [r4 r2]]
            (core/query db1
              [:multi-read
                [[:count :elems {:where [:= :lt "e"]}]
@@ -181,14 +320,25 @@
      (assert= result 1)
      (assert= elem (core/query new-db1 [:get :elems 8]))))
 
-(deftest "list-colls"
-  (let [[new-db1 _] (core/query db1 [:create-index :foos [[:name :asc]]])]
-    (assert= (set [:elems :foos]) (core/query new-db1 [:list-colls]))))
+(deftest "list-collections: no collections"
+  (assert= [] (core/query (core/init) [:list-collections])))
 
-(deftest "explain: non-select"
-  (assert-throws #"select"
-    (core/query db1 [:explain [:list-indexes :elems]])))
+(deftest "list-collections: records and indexes"
+  (let [[db1-1 _] (core/query db1 [:create-index :foos [[:name :asc]]])]
+    (assert= [:elems :foos] (core/query db1-1 [:list-collections]))))
 
-(deftest "explain: select"
-  (assert= [:rmap-lookup [:elems 3]]
-           (core/query db1 [:explain [:select :elems {:where [:= :id 3]}]])))
+(deftest "create-/drop-index"
+  (let [[db1-1 _] (core/query db1   [:create-index :elems [[:name :asc]]])
+        [db1-2 _] (core/query db1-1 [:drop-index   :elems [[:name :asc]]])]
+    (assert= [[[:name :asc]]] (core/query db1-1 [:list-indexes :elems]))
+    (assert-nil (core/query db1-2 [:list-indexes :elems]))))
+
+(deftest "list-indexes: none"
+  (assert-nil (core/query db1 [:list-indexes :foos])))
+
+(deftest "list-indexes: some"
+  (let [[db1-1 _] (core/query db1   [:create-index :elems [[:name :asc]]])
+        [db1-2 _] (core/query db1-1 [:create-index :elems [[:age :asc] [:height :asc]]])
+        [db1-3 _] (core/query db1-2 [:create-index :elems [[:age :desc] [:height :asc]]])]
+    (assert= (set [[[:name :asc]] [[:age :asc] [:height :asc]] [[:age :desc] [:height :asc]]])
+             (set (core/query db1-3 [:list-indexes :elems])))))
