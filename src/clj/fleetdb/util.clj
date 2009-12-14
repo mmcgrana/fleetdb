@@ -20,8 +20,6 @@
     (first coll)  true
     :else         (recur (next coll))))
 
-(def != (complement =))
-
 (defn ? [val]
   (if val true false))
 
@@ -71,3 +69,6 @@
 
 (defn mash [f m]
   (reduce (fn [int-m [k v]] (assoc int-m k (f k v))) {} m))
+
+(defmacro spawn [& body]
+  `(doto (Thread. (fn [] ~@body)) (.start)))

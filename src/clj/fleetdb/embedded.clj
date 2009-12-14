@@ -1,7 +1,7 @@
 (ns fleetdb.embedded
-  (:use [fleetdb.util :only (def- ?)]
+  (:use [fleetdb.util :only (def- ? spawn)]
         [clojure.contrib.seq-utils :only (partition-all)])
-  (:require (fleetdb [core :as core] [exec :as exec] [io :as io]))
+  (:require (fleetdb [core :as core] [fair-lock :as fair-lock] [io :as io]))
   (:import  (java.util ArrayList)))
 
 (def- write-query-type?
@@ -10,7 +10,7 @@
     :multi-write :checked-write})
 
 (defn- dba? [dba]
-  (? (:write-pipe (meta dba))))
+  (? (:write-lock (meta dba))))
 
 (defn- persistent? [dba]
   (? (:write-dos (meta dba))))
@@ -40,7 +40,7 @@
     (io/dos-close dos)))
 
 (defn- init* [db & [other-meta]]
-  (atom db :meta (assoc other-meta :write-pipe (exec/init-pipe))))
+  (atom db :meta (assoc other-meta :write-lock (fair-lock/init))))
 
 (defn init-ephemeral []
   (init* (core/init)))
@@ -58,7 +58,7 @@
     (init* db {:write-dos write-dos :write-path read-write-path})))
 
 (defn close [dba]
-  (exec/join-executor (:write-pipe (meta dba)) 60)
+  (assert (fair-lock/join (:write-lock (meta dba)) 60))
   (if-let [write-dos (:write-dos (meta dba))]
     (io/dos-close write-dos))
   (assert (compare-and-set! dba @dba nil))
@@ -78,33 +78,32 @@
 (defn compact [dba]
   (assert (persistent? dba))
   (assert (not (compacting? dba)))
-  (exec/execute (:write-pipe (meta dba))
-    #(let [tmp-path      (io/tmp-path "/tmp" "compact")
-           db-comp-start @dba]
-       (alter-meta! dba assoc :write-buf (ArrayList.))
-       (exec/spawn (fn []
-         (write-to db-comp-start tmp-path)
-         (exec/execute (:write-pipe (meta dba))
-           (fn []
-             (let [dos (io/dos-init tmp-path)]
-               (doseq [post-comp-query (:write-buf (meta dba))]
-                 (io/dos-write dos post-comp-query))
-               (io/mv tmp-path (:write-path (meta dba)))
-               (io/dos-close (:write-dos (meta dba)))
-               (alter-meta! dba dissoc :write-buf)
-               (alter-meta! dba assoc  :write-dos dos))))))
-       true)))
+  (fair-lock/fair-locking (:write-lock (meta dba))
+    (let [tmp-path      (io/tmp-path "/tmp" "compact")
+          db-comp-start @dba]
+      (alter-meta! dba assoc :write-buf (ArrayList.))
+      (spawn
+        (write-to db-comp-start tmp-path)
+        (fair-lock/fair-locking (:write-lock (meta dba))
+          (let [dos (io/dos-init tmp-path)]
+            (doseq [post-comp-query (:write-buf (meta dba))]
+              (io/dos-write dos post-comp-query))
+            (io/mv tmp-path (:write-path (meta dba)))
+            (io/dos-close (:write-dos (meta dba)))
+            (alter-meta! dba dissoc :write-buf)
+            (alter-meta! dba assoc  :write-dos dos))))
+      true)))
 
 (defn query [dba [query-type :as q]]
   (assert (dba? dba))
   (if (write-query-type? query-type)
-    (exec/execute (:write-pipe (meta dba))
-      #(let [old-db          @dba
-             [new-db result] (core/query old-db q)]
-         (when-let [write-dos (:write-dos (meta dba))]
-           (io/dos-write write-dos q)
-           (when-let [#^ArrayList write-buf (:write-buf (meta dba))]
-             (.add write-buf q)))
-         (assert (compare-and-set! dba old-db new-db))
-         result))
+    (fair-lock/fair-locking (:write-lock (meta dba))
+      (let [old-db          @dba
+            [new-db result] (core/query old-db q)]
+        (when-let [write-dos (:write-dos (meta dba))]
+          (io/dos-write write-dos q)
+          (when-let [#^ArrayList write-buf (:write-buf (meta dba))]
+            (.add write-buf q)))
+        (assert (compare-and-set! dba old-db new-db))
+        result))
     (core/query @dba q)))

@@ -1,5 +1,4 @@
 (ns fleetdb.client
-  (:use     (fleetdb util))
   (:require (fleetdb [io :as io]))
   (:import (java.net Socket)
            (java.io DataInputStream  BufferedInputStream
@@ -14,7 +13,7 @@
 (defn query [client q]
   (io/dos-write (:dos client) q)
   (let [result (io/dis-read (:dis client) io/eof)]
-    (assert (!= result io/eof))
+    (assert (not= result io/eof))
     result))
 
 (defn close [client]

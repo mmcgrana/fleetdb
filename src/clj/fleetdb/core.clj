@@ -1,8 +1,7 @@
 (ns fleetdb.core
   (:import (clojure.lang Numbers Sorted IDeref)
            (fleetdb Compare))
-  (:require (clojure [set :as set])
-            (clojure.contrib [core :as core]))
+  (:require (clojure.contrib [core :as core]))
   (:use (fleetdb util)))
 
 ;; General ordering
@@ -356,7 +355,7 @@
           indexeds
       (if (= sdir :left-right)
         (let [base    (.seqFrom index left-val true)
-              base-l  (if (or left-inc (!= (key (first base)) left-val))
+              base-l  (if (or left-inc (not= (key (first base)) left-val))
                         base
                         (rest base))
               base-lr (if right-inc
@@ -364,7 +363,7 @@
                         (take-while #(Compare/lt  (key %) right-val) base-l))]
           (vals base-lr))
         (let [base    (.seqFrom index right-val false)
-              base-r  (if (or right-inc (!= (key (first base)) right-val))
+              base-r  (if (or right-inc (not= (key (first base)) right-val))
                         base
                         (rest base))
               base-rl (if left-inc

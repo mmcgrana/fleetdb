@@ -1,6 +1,7 @@
 (ns fleetdb.server
   (:use     (fleetdb util))
-  (:require (fleetdb [embedded :as embedded] [io :as io] [exec :as exec])
+  (:require (fleetdb [embedded :as embedded] [io :as io]
+                     [thread-pool :as thread-pool])
             (clj-stacktrace [repl :as stacktrace])
             (clojure.contrib [command-line :as cli]))
   (:import  (java.net ServerSocket Socket InetAddress)
@@ -101,7 +102,7 @@
 (defn run [db-path ephemeral port interface threads protocol]
   (let [inet          (InetAddress/getByName interface)
         server-socket (ServerSocket. port 10000 inet)
-        pool          (exec/init-pool threads)
+        pool          (thread-pool/init threads)
         handler       (protocol-handlers protocol)
         loading       (and db-path (io/exist? db-path))
         dba           (if ephemeral
@@ -114,7 +115,7 @@
     (println "FleetDB serving" (name protocol) "protocol on port" port)
     (loop []
       (let [socket (doto (.accept server-socket))]
-        (exec/submit pool #(handler dba socket)))
+        (thread-pool/submit pool #(handler dba socket)))
       (recur))))
 
 (cli/with-command-line *command-line-args*
