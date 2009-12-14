@@ -10,9 +10,6 @@
                      DataInputStream  BufferedInputStream
                      DataOutputStream BufferedOutputStream)))
 
-(defmacro- safe [& body]
-  `(try ~@body (catch Exception e# e#)))
-
 (defn- embedded-query [dba q]
   (let [[q-type q-opts] q]
     (condp = q-type
@@ -26,25 +23,8 @@
     (if (sequential? result) (vec result) result)))
 
 (defn- process-query [dba q]
-  (safe
-    (or (embedded-query dba q)
-        (core-query dba q))))
-
-(defn- text-read-query [#^PushbackReader in eof-val]
-  (safe
-    (binding [*read-eval* false]
-      (read in false eof-val))))
-
-(defn- text-write-exception [#^PrintWriter out e]
-  (if (raised? e)
-    (.println out (str e))
-    (stacktrace/pst-on out false e))
-  (.println out)
-  (.flush out))
-
-(defn- text-write-result [#^PrintWriter out result]
-  (.println out (prn-str result))
-  (.flush out))
+  (or (embedded-query dba q)
+      (core-query dba q)))
 
 (defn- text-handler [dba #^Socket socket]
   (try
@@ -53,28 +33,21 @@
                 in     (PushbackReader. (BufferedReader. (InputStreamReader.  (.getInputStream  socket))))]
       (.setKeepAlive socket true)
       (loop []
-        (let [read-result (text-read-query in io/eof)]
-          (when-not (identical? io/eof read-result)
-            (if (instance? Exception read-result)
-              (text-write-exception out read-result)
-              (let [query-result (process-query dba read-result)]
-                (if (instance? Exception query-result)
-                  (text-write-exception out query-result)
-                  (text-write-result out query-result))))
-            (recur)))))
+        (try
+          (let [query  (read in false io/eof)
+                result (process-query dba query)]
+            (.println out (prn-str result))
+            (.flush out))
+          (catch Exception e
+            (if (raised? e)
+              (.println out (str e))
+              (stacktrace/pst-on out false e))
+            (.println out)
+            (.flush out)))
+        (recur)))
     (catch Exception e
       (stacktrace/pst-on System/err false e)
       (.println System/err))))
-
-(defn- binary-read-query [#^DataInputStream in eof-val]
-  (safe
-    (io/dis-read in eof-val)))
-
-(defn- binary-write-exception [#^DataOutputStream out e]
-  (io/dos-write out [1 (stacktrace/pst-str e)]))
-
-(defn- binary-write-result [#^DataOutputStream out result]
-  (io/dos-write out [0 result]))
 
 (defn- binary-handler [dba #^Socket socket]
   (try
@@ -83,15 +56,13 @@
                 in     (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))]
       (.setKeepAlive socket true)
       (loop []
-        (let [read-result (binary-read-query in io/eof)]
-          (when-not (identical? io/eof read-result)
-            (if (instance? Exception read-result)
-              (binary-write-exception out read-result)
-              (let [query-result (process-query dba read-result)]
-                (if (instance? Exception query-result)
-                  (binary-write-exception out query-result)
-                  (binary-write-result out query-result))))
-            (recur)))))
+        (try
+          (let [query  (io/dis-read in io/eof)
+                result (process-query dba query)]
+            (io/dos-write out [0 result]))
+          (catch Exception e
+            (io/dos-write out [1 (stacktrace/pst-str e)])))
+        (recur)))
     (catch Exception e
       (stacktrace/pst-on System/err false e)
       (.println System/err))))
