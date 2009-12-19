@@ -2,13 +2,13 @@
   (:use     (fleetdb util))
   (:require (fleetdb [embedded :as embedded] [io :as io]
                      [thread-pool :as thread-pool])
-            (clj-stacktrace [repl :as stacktrace])
-            (clojure.contrib [command-line :as cli]))
+            (clj-stacktrace [repl :as stacktrace]))
   (:import  (java.net ServerSocket Socket InetAddress)
             (java.io PushbackReader BufferedReader InputStreamReader
                      PrintWriter    BufferedWriter OutputStreamWriter
                      DataInputStream  BufferedInputStream
-                     DataOutputStream BufferedOutputStream)))
+                     DataOutputStream BufferedOutputStream)
+            (joptsimple OptionParser OptionSet OptionException)))
 
 (defn- embedded-query [dba q]
   (let [[q-type q-opts] q]
@@ -72,8 +72,8 @@
 (def- protocol-handlers
   {:binary binary-handler :text text-handler})
 
-(defn run [db-path ephemeral port interface threads protocol]
-  (let [inet          (InetAddress/getByName interface)
+(defn run [db-path ephemeral port addr threads protocol]
+  (let [inet          (InetAddress/getByName addr)
         server-socket (ServerSocket. port 10000 inet)
         pool          (thread-pool/init threads)
         handler       (protocol-handlers protocol)
@@ -91,12 +91,34 @@
         (thread-pool/submit pool #(handler dba socket)))
       (recur))))
 
-(cli/with-command-line *command-line-args*
-  "FleetDB Server"
-  [[f  "Full path to database log."]
-   [e? "Ephemeral: do not log database changes to disk." false]
-   [p  "TCP port number to listen on." "3400"]
-   [a  "Local address to listen on." "127.0.0.1"]
-   [t  "Maximum number of worker threads." "100"]
-   [i  "Client/server protocol: one of binary or text." "binary"]]
-  (run f e? (Integer/decode p) a (Integer/decode t) (keyword i)))
+(defn- print-help []
+  (println "FleetDB Server                                                             ")
+  (println "-f <path>   Path to database log file                                      ")
+  (println "-e          Ephemeral: do not log changes to disk                          ")
+  (println "-p <port>   TCP port to listen on (default: 3400)                          ")
+  (println "-a <addr>   Local address to listen on (default: 127.0.0.1)                ")
+  (println "-t <num>    Maximum number of worker threads (default: 100)                ")
+  (println "-i <name>   Client/server protocol: one of {binary, text} (default: binary)")
+  (println "-h          Print this help and exit.                                      "))
+
+(defn- parse-int [s]
+  (and s (Integer/decode s)))
+
+(let [opt-parser (OptionParser. "f:ep:a:t:i:h")
+      arg-array  (into-array String *command-line-args*)
+      opt-set    (.parse opt-parser arg-array)]
+  (cond
+    (not-any? #(.has opt-set #^String %) ["f" "e" "p" "a" "t" "i" "h"])
+      (print-help)
+    (.has opt-set "h")
+      (print-help)
+    (not (or (.has opt-set "f") (.has opt-set "e")))
+      (println "You must specify either -e or -f <path>. Use -h for help.")
+    :else
+      (let [db-path (.valueOf opt-set "f")
+            ephemeral (.has opt-set "e")
+            port      (or (parse-int (.valueOf opt-set "p")) 3400)
+            addr      (or (.valueOf opt-set "a") "127.0.0.1")
+            threads   (or (parse-int (.valueOf opt-set "t")) 100)
+            protocol  (or (keyword (or (.valueOf opt-set "i") "binary")))]
+        (run db-path ephemeral port addr threads protocol))))
