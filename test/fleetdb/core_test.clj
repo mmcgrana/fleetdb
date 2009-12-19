@@ -325,7 +325,7 @@
 
 (deftest "list-collections: records and indexes"
   (let [[db1-1 _] (core/query db1 [:create-index :foos [[:name :asc]]])]
-    (assert= [:elems :foos] (core/query db1-1 [:list-collections]))))
+    (assert-set= [:elems :foos] (core/query db1-1 [:list-collections]))))
 
 (deftest "create-/drop-index"
   (let [[db1-1 _] (core/query db1   [:create-index :elems [[:name :asc]]])

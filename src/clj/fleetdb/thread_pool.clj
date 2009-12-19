@@ -6,5 +6,3 @@
 
 (defn submit [#^ExecutorService executor #^Callable f]
   (.submit executor f))
-
-

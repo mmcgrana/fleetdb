@@ -34,10 +34,11 @@
       (.setKeepAlive socket true)
       (loop []
         (try
-          (let [query  (read in false io/eof)
-                result (process-query dba query)]
-            (.println out (prn-str result))
-            (.flush out))
+          (let [query  (read in false io/eof)]
+            (if-not (identical? query io/eof)
+              (let [result (process-query dba query)]
+                (.println out (prn-str result))
+                (.flush out))))
           (catch Exception e
             (if (raised? e)
               (.println out (str e))
@@ -57,9 +58,10 @@
       (.setKeepAlive socket true)
       (loop []
         (try
-          (let [query  (io/dis-read in io/eof)
-                result (process-query dba query)]
-            (io/dos-write out [0 result]))
+          (let [query  (io/dis-read in io/eof)]
+            (if-not (identical? query io/eof)
+              (let [result (process-query dba query)]
+                (io/dos-write out [0 result]))))
           (catch Exception e
             (io/dos-write out [1 (stacktrace/pst-str e)])))
         (recur)))

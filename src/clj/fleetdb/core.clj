@@ -322,15 +322,15 @@
       (apply concat (map #(exec-plan db %) sources)))))
 
 (defmethod exec-plan :record-lookup [db [_ [coll id]]]
-  (if-let [record (get-in db [:rmaps coll id])]
+  (if-let [record (get-in db [coll :rmap id])]
     (list record)))
 
 (defmethod exec-plan :record-multilookup [db [_ [coll ids]]]
-  (if-let [rmap (get-in db [:rmaps coll])]
+  (if-let [rmap (get-in db [coll :rmap])]
     (compact (map #(rmap %) ids))))
 
 (defmethod exec-plan :record-scan [db [_ coll]]
-  (vals (get-in db [:rmaps coll])))
+  (vals (get-in db [coll :rmap])))
 
 (defn- indexed-flatten1 [indexed]
   (cond (nil? indexed) nil
@@ -347,11 +347,11 @@
           :single  (cons f (indexed-flatten r)))))))
 
 (defmethod exec-plan :index-lookup [db [_ [coll ispec val]]]
-  (indexed-flatten1 (get-in db [:imaps coll ispec val])))
+  (indexed-flatten1 (get-in db [coll :imap ispec val])))
 
 (defmethod exec-plan :index-seq
   [db [_ [coll ispec sdir left-val left-inc right-val right-inc]]]
-    (let [#^Sorted index (get-in db [:imaps coll ispec])
+    (let [#^Sorted index (get-in db [coll :imap ispec])
           indexeds
       (if (= sdir :left-right)
         (let [base    (.seqFrom index left-val true)
@@ -373,7 +373,7 @@
       (indexed-flatten indexeds)))
 
 (defn- coll-ispecs [db coll]
-  (keys (get-in db [:imaps coll])))
+  (keys (get-in db [coll :imap])))
 
 (defn- find-records [db coll {:keys [where order offset limit only] :as opts}]
   (assert (or (nil? opts) (map? opts)))
@@ -463,7 +463,7 @@
   (find-records db coll opts))
 
 (defmethod query :get [db [_ coll id-s]]
-  (if-let [rmap (get-in db [:rmaps coll])]
+  (if-let [rmap (get-in db [coll :rmap])]
     (if (vector? id-s)
       (compact (map #(rmap %) id-s))
       (rmap id-s))))
@@ -472,13 +472,11 @@
   (count (find-records db coll opts)))
 
 (defn- db-apply [db coll records apply-fn]
-  (let [{old-rmaps :rmaps old-imaps :imaps} db
-        old-rmap   (coll old-rmaps)
-        old-imap   (coll old-imaps)
+  (let [old-coll (coll db)
+        old-rmap (:rmap old-coll)
+        old-imap (:imap old-coll)
         [new-rmap new-imap] (reduce apply-fn [old-rmap old-imap] records)]
-    [(-> db
-       (assoc-in [:rmaps coll] new-rmap)
-       (assoc-in [:imaps coll] new-imap))
+    [(assoc db coll {:rmap new-rmap :imap new-imap})
      (count records)]))
 
 (defmethod query :insert [db [_ coll record-s]]
@@ -506,25 +504,26 @@
     (find-plan coll (coll-ispecs db coll) where order offset limit only)))
 
 (defmethod query :list-collections [db _]
-  (uniq (sort
-    (map first
-      (filter #(not (empty? (second %)))
-              (concat (:rmaps db) (:imaps db)))))))
+  (map first
+    (filter
+      (fn [[coll {rmap :rmap imap :imap}]]
+        (or (not (empty? rmap)) (not (empty? imap))))
+      db)))
 
 (defmethod query :create-index [db [_ coll ispec]]
-  (if (get-in db [:imaps coll ispec])
+  (if (get-in db [coll :imap ispec])
     [db 0]
-    (let [records (vals (get-in db [:rmaps coll]))
+    (let [records (vals (get-in db [coll :rmap]))
           index   (index-build records ispec)]
-      [(assoc-in db [:imaps coll ispec] index) 1])))
+      [(assoc-in db [coll :imap ispec] index) 1])))
 
 (defmethod query :drop-index [db [_ coll ispec]]
-  (if-not (get-in db [:imaps coll ispec])
+  (if-not (get-in db [coll :imap ispec])
     [db 0]
-    [(core/dissoc-in db [:imaps coll ispec]) 1]))
+    [(core/dissoc-in db [coll :imap ispec]) 1]))
 
 (defmethod query :list-indexes [db [_ coll]]
-  (keys (get-in db [:imaps coll])))
+  (keys (get-in db [coll :imap])))
 
 (defmethod query :multi-read [db [_ queries]]
   (vec (map #(query db %) queries)))
@@ -545,5 +544,4 @@
       [db [false actual]])))
 
 (defn init []
-  {:rmaps {}
-   :imaps {}})
+  {})
