@@ -70,7 +70,7 @@
       (.println System/err))))
 
 (def- protocol-handlers
-  {:binary binary-handler :text text-handler})
+  {:text text-handler :binary binary-handler })
 
 (defn run [db-path ephemeral port addr threads protocol]
   (let [inet          (InetAddress/getByName addr)
@@ -115,7 +115,7 @@
     (not (or (.has opt-set "f") (.has opt-set "e")))
       (println "You must specify either -e or -f <path>. Use -h for help.")
     :else
-      (let [db-path (.valueOf opt-set "f")
+      (let [db-path   (.valueOf opt-set "f")
             ephemeral (.has opt-set "e")
             port      (or (parse-int (.valueOf opt-set "p")) 3400)
             addr      (or (.valueOf opt-set "a") "127.0.0.1")
