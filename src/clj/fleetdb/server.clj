@@ -63,7 +63,8 @@
               (let [result (process-query dba query)]
                 (io/dos-write out [0 result]))))
           (catch Exception e
-            (io/dos-write out [1 (stacktrace/pst-str e)])))
+            (io/dos-write out
+              [1 (if (raised? e) (str e) (stacktrace/pst-str e))])))
         (recur)))
     (catch Exception e
       (stacktrace/pst-on System/err false e)
