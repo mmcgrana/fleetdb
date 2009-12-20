@@ -1,5 +1,5 @@
 (ns fleetdb.embedded-test
-  (:require (fleetdb [embedded :as embedded] [io :as io]))
+  (:require (fleetdb [embedded :as embedded] [io :as io] [file :as file]))
   (:use (clj-unit core) (fleetdb util)))
 
 (defmacro- with-dba [[name dba-form] & body]
@@ -28,7 +28,7 @@
       (assert= 2 (embedded/query dba-2 [:count :elems])))))
 
 (deftest "persistent lifecycle"
-  (io/rm log-path)
+  (file/rm log-path)
   (with-dba [dba-0 (embedded/init-persistent log-path)]
     (embedded/query dba-0 [:insert :elems [{:id 1} {:id 2}]])
     (assert= 2 (embedded/query dba-0 [:count :elems]))
@@ -36,10 +36,10 @@
       (embedded/query dba-0 [:insert :elems {:id (+ 3 i)}])
       (when (odd? i)
         (embedded/query dba-0 [:delete :elems {:where [:= :id i]}])))
-    (let [pre-compact-size (io/size log-path)]
+    (let [pre-compact-size (file/size log-path)]
       (embedded/compact dba-0)
       (Thread/sleep 500)
-      (let [post-compact-size (io/size log-path)]
+      (let [post-compact-size (file/size log-path)]
         (assert-that (< post-compact-size pre-compact-size)))))
   (with-dba [dba-1 (embedded/load-persistent log-path)]
     (assert= 52 (embedded/query dba-1 [:count :elems]))))

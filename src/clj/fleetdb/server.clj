@@ -1,6 +1,6 @@
 (ns fleetdb.server
   (:use     (fleetdb util))
-  (:require (fleetdb [embedded :as embedded] [io :as io]
+  (:require (fleetdb [embedded :as embedded] [io :as io] [file :as file]
                      [thread-pool :as thread-pool])
             (clj-stacktrace [repl :as stacktrace]))
   (:import  (java.net ServerSocket Socket InetAddress)
@@ -78,7 +78,7 @@
         server-socket (ServerSocket. port 10000 inet)
         pool          (thread-pool/init threads)
         handler       (protocol-handlers protocol)
-        loading       (and db-path (io/exist? db-path))
+        loading       (and db-path (file/exist? db-path))
         dba           (if ephemeral
                         (if loading
                           (embedded/load-ephemeral db-path)

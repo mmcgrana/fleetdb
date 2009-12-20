@@ -1,7 +1,8 @@
 (ns fleetdb.embedded
   (:use [fleetdb.util :only (def- ? spawn)]
         [clojure.contrib.seq-utils :only (partition-all)])
-  (:require (fleetdb [core :as core] [fair-lock :as fair-lock] [io :as io]))
+  (:require (fleetdb [core :as core] [fair-lock :as fair-lock]
+                     [io :as io] [file :as file]))
   (:import  (java.util ArrayList)))
 
 (def- write-query-type?
@@ -70,16 +71,16 @@
 
 (defn snapshot [dba snapshot-path]
   (assert (ephemeral? dba))
-  (let [tmp-path  (io/tmp-path "/tmp" "snapshot")]
+  (let [tmp-path  (file/tmp-path "/tmp" "snapshot")]
     (write-to @dba tmp-path)
-    (io/mv tmp-path snapshot-path)
+    (file/mv tmp-path snapshot-path)
     true))
 
 (defn compact [dba]
   (assert (persistent? dba))
   (assert (not (compacting? dba)))
   (fair-lock/fair-locking (:write-lock (meta dba))
-    (let [tmp-path      (io/tmp-path "/tmp" "compact")
+    (let [tmp-path      (file/tmp-path "/tmp" "compact")
           db-comp-start @dba]
       (alter-meta! dba assoc :write-buf (ArrayList.))
       (spawn
@@ -88,7 +89,7 @@
           (let [dos (io/dos-init tmp-path)]
             (doseq [post-comp-query (:write-buf (meta dba))]
               (io/dos-write dos post-comp-query))
-            (io/mv tmp-path (:write-path (meta dba)))
+            (file/mv tmp-path (:write-path (meta dba)))
             (io/dos-close (:write-dos (meta dba)))
             (alter-meta! dba dissoc :write-buf)
             (alter-meta! dba assoc  :write-dos dos))))
