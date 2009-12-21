@@ -27,11 +27,14 @@
   (proxy [Exception] [msg]
     (toString [] msg)))
 
-(def- raise-excp-class
+(def raise-excp-class
   (class (raise-excp "")))
 
 (defn raise [& msg-elems]
   (throw (raise-excp (apply str msg-elems))))
+
+(defmacro rassert [test & msg-elems]
+  `(if-not ~test (raise ~@msg-elems)))
 
 (defn raised? [e]
   (= (class e) raise-excp-class))

@@ -240,11 +240,14 @@
 (defn- only-plan [source only]
   (if only [:only only source] source))
 
-(defn- find-plan [coll ispecs where order offset limit only]
-  (-> (where-order-plan coll ispecs where order)
-   (offset-plan offset)
-   (limit-plan  limit)
-   (only-plan   only)))
+(defn- find-plan [coll ispecs opts]
+  (rassert (or (nil? opts) (map? opts))
+    "Unrecognized find options: " (pr-str opts))
+  (let [{:keys [where order offset limit only]} opts]
+    (-> (where-order-plan coll ispecs where order)
+     (offset-plan offset)
+     (limit-plan  limit)
+     (only-plan   only))))
 
 
 ;; Find execution
@@ -375,10 +378,8 @@
 (defn- coll-ispecs [db coll]
   (keys (get-in db [coll :imap])))
 
-(defn- find-records [db coll {:keys [where order offset limit only] :as opts}]
-  (assert (or (nil? opts) (map? opts)))
-  (exec-plan db
-    (find-plan coll (coll-ispecs db coll) where order offset limit only)))
+(defn- find-records [db coll opts]
+  (exec-plan db (find-plan coll (coll-ispecs db coll) opts)))
 
 
 ;; RMap and IMap manipulation
@@ -498,10 +499,14 @@
       [(rmap-delete int-rmap old-record)
        (imap-delete int-imap old-record)])))
 
-(defmethod query :explain [db [_ [query-type coll opts]]]
-  (assert (= query-type :select))
-  (let [{:keys [where order offset limit only]} opts]
-    (find-plan coll (coll-ispecs db coll) where order offset limit only)))
+(defmethod query :explain [db [_ [query-type coll e3 e4]]]
+  (cond
+    (#{:select :count :delete} query-type)
+      (find-plan coll (coll-ispecs db coll) e3)
+    (= :update query-type)
+      (find-plan coll (coll-ispecs db coll) e4)
+    :invalid
+      (raise "Cannot explain query type " query-type)))
 
 (defmethod query :list-collections [db _]
   (map first

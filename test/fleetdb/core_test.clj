@@ -81,13 +81,24 @@
     (core/query db1
       [:select :elems {:where [:in :id [4 2]] :only {:foo :bar}}])))
 
-(deftest "explain: non-select"
-  (assert-throws #"select"
+(deftest "explain: select, count, update, delete"
+  (let [coll      :elems
+        find-opts {:where [:= :id 3]}
+        queries   [[:select coll find-opts]
+                   [:count  coll find-opts]
+                   [:delete coll find-opts]
+                   [:update coll {:up true} find-opts]]]
+    (doseq [query queries]
+      (assert= [:record-lookup [:elems 3]]
+               (core/query db1 [:explain query])))))
+
+(deftest "explain: other queries"
+  (assert-throws #"Cannot explain query type :list-indexes"
     (core/query db1 [:explain [:list-indexes :elems]])))
 
-(deftest "explain: select"
-  (assert= [:record-lookup [:elems 3]]
-           (core/query db1 [:explain [:select :elems {:where [:= :id 3]}]])))
+(deftest "error on unrecognized find options"
+  (assert-throws #"Unrecognized find options: :foo"
+    (core/query db1 [:select :elems :foo])))
 
 (defn assert-find [opts plan1-expected & [plan2-expected]]
   (let [plan1-actual (core/query db1 [:explain [:select :elems opts]])
