@@ -31,51 +31,14 @@ public class Serializer {
   private static final byte NIL_TYPE =         10;
 
   public static void serialize(DataOutputStream dos, Object obj) throws Exception {
-    if (obj instanceof IPersistentMap) {
-      IPersistentMap map = (IPersistentMap) obj;
-      ISeq mSeq = map.seq();
-      dos.writeByte(MAP_TYPE);
-      dos.writeInt(map.count());
-      while (mSeq != null) {
-        IMapEntry me = (IMapEntry) mSeq.first();
-        serialize(dos, me.key());
-        serialize(dos, me.val());
-        mSeq = mSeq.next();
-      }
-
-    } else if (obj instanceof IPersistentVector) {
-      IPersistentVector vec = (IPersistentVector) obj;
-      ISeq vSeq = vec.seq();
-      dos.writeByte(VECTOR_TYPE);
-      dos.writeInt(vec.count());
-      while (vSeq != null) {
-        serialize(dos, vSeq.first());
-        vSeq = vSeq.next();
-      }
-
-    } else if ((obj instanceof IPersistentList) ||
-               (obj instanceof LazySeq)) {
-      ISeq lSeq = ((Seqable) obj).seq();
-      int lCount = 0;
-      ISeq lSeqTail = lSeq;
-		  for(; lSeqTail != null; lSeqTail = lSeqTail.next()) {
-		  	lCount++;
-		  }
-		  dos.writeByte(LIST_TYPE);
-	    dos.writeInt(lCount);
-	    while (lSeq != null) {
-	      serialize(dos, lSeq.first());
-	      lSeq = lSeq.next();
-	    }
-
-    } else if (obj instanceof Keyword) {
+    if (obj instanceof Keyword) {
       Keyword kw = (Keyword) obj;
       byte[] bytes = kw.getName().getBytes();
       int byteSize = bytes.length;
       dos.writeByte(KEYWORD_TYPE);
       dos.writeInt(byteSize);
       dos.write(bytes, 0, byteSize);
-
+    
     } else if (obj instanceof String) {
       String str = (String) obj;
       byte[] bytes = str.getBytes();
@@ -109,6 +72,38 @@ public class Serializer {
 
     } else if (obj == null) {
       dos.writeByte(NIL_TYPE);
+      
+    } else if (obj instanceof IPersistentMap) {
+      IPersistentMap map = (IPersistentMap) obj;
+      ISeq mSeq = map.seq();
+      dos.writeByte(MAP_TYPE);
+      dos.writeInt(map.count());
+      while (mSeq != null) {
+        IMapEntry me = (IMapEntry) mSeq.first();
+        serialize(dos, me.key());
+        serialize(dos, me.val());
+        mSeq = mSeq.next();
+      }
+
+    } else if (obj instanceof IPersistentVector) {
+      IPersistentVector vec = (IPersistentVector) obj;
+      int len = vec.count();
+      dos.writeByte(VECTOR_TYPE);
+      dos.writeInt(len);
+      for (int i = 0; i < len; i++) {
+        serialize(dos, vec.nth(i));
+      }
+
+    } else if ((obj instanceof IPersistentList) ||
+               (obj instanceof LazySeq)) {
+      ISeq seq = ((Seqable) obj).seq();
+      int len = seq.count();
+		  dos.writeByte(LIST_TYPE);
+	    dos.writeInt(len);
+	    while (seq != null) {
+	      serialize(dos, seq.first());
+	      seq = seq.next();
+	    }
 
     } else {
       throw new Exception("Cannot serialize " + obj);
@@ -118,31 +113,7 @@ public class Serializer {
   public static Object deserialize(DataInputStream dis, Object eofValue) throws Exception {
     try {
       byte typeByte = dis.readByte();
-      switch (typeByte) {
-        case MAP_TYPE:
-          int numMObjs = dis.readInt() * 2;
-          Object[] mObjs = new Object[numMObjs];
-          for (int i = 0; i < numMObjs; i++) {
-            mObjs[i] = deserialize(dis, eofValue);
-          }
-          return RT.map(mObjs);
-
-        case VECTOR_TYPE:
-          int numVObjs = dis.readInt();
-          Object[] vObjs = new Object[numVObjs];
-          for (int i = 0; i < numVObjs; i++) {
-            vObjs[i] = deserialize(dis, eofValue);
-          }
-          return LazilyPersistentVector.createOwning(vObjs);
-
-        case LIST_TYPE:
-          int numLObjs = dis.readInt();
-          Object[] lObjs = new Object[numLObjs];
-          for (int i = 0; i < numLObjs; i++) {
-            lObjs[i] = deserialize(dis, eofValue);
-          }
-          return ArraySeq.create(lObjs);
-          
+      switch (typeByte) {  
         case KEYWORD_TYPE:
           int keyByteSize = dis.readInt();
           byte[] keyBytes = new byte[keyByteSize];
@@ -175,6 +146,30 @@ public class Serializer {
 
         case NIL_TYPE:
           return null;
+
+        case MAP_TYPE:
+          int mLen = dis.readInt() * 2;
+          Object[] mObjs = new Object[mLen];
+          for (int i = 0; i < mLen; i++) {
+            mObjs[i] = deserialize(dis, eofValue);
+          }
+          return RT.map(mObjs);
+
+        case VECTOR_TYPE:
+          int vLen = dis.readInt();
+          Object[] vObjs = new Object[vLen];
+          for (int i = 0; i < vLen; i++) {
+            vObjs[i] = deserialize(dis, eofValue);
+          }
+          return LazilyPersistentVector.createOwning(vObjs);
+
+        case LIST_TYPE:
+          int lLen = dis.readInt();
+          Object[] lObjs = new Object[lLen];
+          for (int i = 0; i < lLen; i++) {
+            lObjs[i] = deserialize(dis, eofValue);
+          }
+          return ArraySeq.create(lObjs);
 
         default:
           throw new Exception("Cannot deserialize " + typeByte);
