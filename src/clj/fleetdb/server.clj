@@ -11,11 +11,11 @@
             (joptsimple OptionParser OptionSet OptionException)))
 
 (defn- embedded-query [dba q]
-  (let [[q-type q-opts] q]
+  (let [[q-type q-opt] q]
     (condp = q-type
       :ping     "pong"
       :compact  (embedded/compact dba)
-      :snapshot (embedded/snapshot dba (:path q-opts))
+      :snapshot (embedded/snapshot dba q-opts)
       nil)))
 
 (defn- core-query [dba q]
