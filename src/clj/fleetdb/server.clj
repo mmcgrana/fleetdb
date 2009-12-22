@@ -26,52 +26,60 @@
   (or (embedded-query dba q)
       (core-query dba q)))
 
-(defn- text-handler [dba #^Socket socket]
-  (try
-    (with-open [socket socket
-                out    (PrintWriter.    (BufferedWriter. (OutputStreamWriter. (.getOutputStream socket))))
-                in     (PushbackReader. (BufferedReader. (InputStreamReader.  (.getInputStream  socket))))]
-      (.setKeepAlive socket true)
-      (loop []
-        (try
-          (let [query  (read in false io/eof)]
-            (if-not (identical? query io/eof)
-              (let [result (process-query dba query)]
-                (.println out (prn-str result))
-                (.flush out))))
-          (catch Exception e
-            (if (raised? e)
-              (.println out (str e))
-              (stacktrace/pst-on out false e))
-            (.println out)
-            (.flush out)))
-        (recur)))
-    (catch Exception e
-      (stacktrace/pst-on System/err false e)
-      (.println System/err))))
+(defn generic-handler [init-out init-in read-query write-response]
+  (fn [dba #^Socket socket]
+    (try
+      (with-open [socket socket
+                  out    (init-out socket)
+                  in     (init-in  socket)]
+        (.setKeepAlive socket true)
+        (loop []
+          (if (try
+                (let [query (read-query in io/eof)]
+                  (if (identical? query io/eof)
+                    false
+                    (let [result (process-query dba query)]
+                      (write-response out [0 result])
+                      true)))
+                (catch Exception e
+                  (write-response out
+                    (if (raised? e)
+                      [1 (str e)]
+                      [2 (stacktrace/pst-str e)]))
+                  true))
+              (recur))))
+      (catch Exception e
+        (stacktrace/pst-on System/err false e)
+        (.println System/err)))))
 
-(defn- binary-handler [dba #^Socket socket]
-  (try
-    (with-open [socket socket
-                out    (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))
-                in     (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))]
-      (.setKeepAlive socket true)
-      (loop []
-        (try
-          (let [query  (io/dis-read in io/eof)]
-            (if-not (identical? query io/eof)
-              (let [result (process-query dba query)]
-                (io/dos-write out [0 result]))))
-          (catch Exception e
-            (io/dos-write out
-              [1 (if (raised? e) (str e) (stacktrace/pst-str e))])))
-        (recur)))
-    (catch Exception e
-      (stacktrace/pst-on System/err false e)
-      (.println System/err))))
+(def- text-handler
+  (generic-handler
+    (fn [#^Socket socket] (PrintWriter. (BufferedWriter. (OutputStreamWriter. (.getOutputStream socket)))))
+    (fn [#^Socket socket] (PushbackReader. (BufferedReader. (InputStreamReader. (.getInputStream  socket)))))
+    (fn [#^PushbackReader in eof-val] (read in false eof-val))
+    (fn [#^PrintWriter out [resp-code resp-val :as resp]]
+      (if (#{0 1} resp-code)
+        (.print out (prn-str resp))
+        (.print out resp-val))
+      (.println out)
+      (.flush out))))
+
+(def- binary-handler
+  (generic-handler
+    (fn [#^Socket socket] (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket))))
+    (fn [#^Socket socket] (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket))))
+    (fn [#^DataInputStream in eof-val] (io/dis-deserialize in io/eof))
+    (fn [#^DataOutputStream out resp]  (io/dos-serialize out resp))))
+
+(def- bert-handler
+  (generic-handler
+    (fn [#^Socket socket] (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket))))
+    (fn [#^Socket socket] (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket))))
+    (fn [#^DataInputStream in eof-val] (io/dis-berp-decode in io/eof))
+    (fn [#^DataOutputStream out resp]  (io/dos-berp-encode out resp))))
 
 (def- protocol-handlers
-  {:text text-handler :binary binary-handler })
+  {:text text-handler :binary binary-handler :bert bert-handler})
 
 (defn run [db-path ephemeral port addr threads protocol]
   (let [inet          (InetAddress/getByName addr)
@@ -93,14 +101,14 @@
       (recur))))
 
 (defn- print-help []
-  (println "FleetDB Server                                                             ")
-  (println "-f <path>   Path to database log file                                      ")
-  (println "-e          Ephemeral: do not log changes to disk                          ")
-  (println "-p <port>   TCP port to listen on (default: 3400)                          ")
-  (println "-a <addr>   Local address to listen on (default: 127.0.0.1)                ")
-  (println "-t <num>    Maximum number of worker threads (default: 100)                ")
-  (println "-i <name>   Client/server protocol: one of {binary, text} (default: binary)")
-  (println "-h          Print this help and exit.                                      "))
+  (println "FleetDB Server                                                                 ")
+  (println "-f <path>   Path to database log file                                          ")
+  (println "-e          Ephemeral: do not log changes to disk                              ")
+  (println "-p <port>   TCP port to listen on (default: 3400)                              ")
+  (println "-a <addr>   Local address to listen on (default: 127.0.0.1)                    ")
+  (println "-t <num>    Maximum number of worker threads (default: 100)                    ")
+  (println "-i <name>   Client/server protocol: one of {text,binary,bert} (default: binary)")
+  (println "-h          Print this help and exit.                                          "))
 
 (defn- parse-int [s]
   (and s (Integer/decode s)))
@@ -113,6 +121,9 @@
       (print-help)
     (.has opt-set "h")
       (print-help)
+    (not (empty? (.nonOptionArguments opt-set)))
+      (printf "Unrecognized option '%s'. Use -h for help.\n"
+              (first (.nonOptionArguments opt-set)))
     (not (or (.has opt-set "f") (.has opt-set "e")))
       (println "You must specify either -e or -f <path>. Use -h for help.")
     :else

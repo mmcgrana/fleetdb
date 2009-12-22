@@ -3,7 +3,7 @@
   (:use (clj-unit core)))
 
 (defmacro with-client [[name host-form port-form] & body]
-  `(let [~name (client/connect ~host-form ~port-form)]
+  `(let [~name (client/connect ~host-form ~port-form :binary)]
      (try
        (client/query ~name [:delete :elems])
        ~@body

@@ -27,7 +27,7 @@
 
 (defn- read-from [read-path]
   (let [dis      (io/dis-init read-path)
-        queries  (io/dis-seq dis)
+        queries  (io/dis-deserialized-seq dis)
         empty    (core/init)]
     (reduce replay-query empty queries)))
 
@@ -35,9 +35,9 @@
   (let [dos (io/dos-init write-path)]
     (doseq [coll (core/query db [:list-collections])]
       (doseq [records (partition-all 100 (core/query db [:select coll]))]
-        (io/dos-write dos [:insert coll (vec records)]))
+        (io/dos-serialize dos [:insert coll (vec records)]))
       (doseq [ispec (core/query db [:list-indexes coll])]
-        (io/dos-write dos [:create-index coll ispec])))
+        (io/dos-serialize dos [:create-index coll ispec])))
     (io/dos-close dos)))
 
 (defn- init* [db & [other-meta]]
@@ -88,7 +88,7 @@
         (fair-lock/fair-locking (:write-lock (meta dba))
           (let [dos (io/dos-init tmp-path)]
             (doseq [post-comp-query (:write-buf (meta dba))]
-              (io/dos-write dos post-comp-query))
+              (io/dos-serialize dos post-comp-query))
             (file/mv tmp-path (:write-path (meta dba)))
             (io/dos-close (:write-dos (meta dba)))
             (alter-meta! dba dissoc :write-buf)
@@ -102,7 +102,7 @@
       (let [old-db          @dba
             [new-db result] (core/query old-db q)]
         (when-let [write-dos (:write-dos (meta dba))]
-          (io/dos-write write-dos q)
+          (io/dos-serialize write-dos q)
           (when-let [#^ArrayList write-buf (:write-buf (meta dba))]
             (.add write-buf q)))
         (assert (compare-and-set! dba old-db new-db))

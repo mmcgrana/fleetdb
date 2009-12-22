@@ -1,18 +1,28 @@
 (ns fleetdb.client
+  (:use (fleetdb [util :only (def-)]))
   (:require (fleetdb [io :as io]))
   (:import (java.net Socket)
            (java.io DataInputStream  BufferedInputStream
                     DataOutputStream BufferedOutputStream)))
 
-(defn connect [#^String host #^Integer port]
+(def- read-fns
+  {:binary io/dis-deserialize :bert io/dis-berp-decode})
+
+(def- write-fns
+  {:binary io/dos-serialize   :bert io/dos-berp-encode})
+
+(defn connect [#^String host #^Integer port protocol]
+  (assert (#{:binary :bert} protocol))
   (let [socket (Socket. host port)]
-    {:socket socket
-     :dis    (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))
-     :dos    (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))}))
+    {:dis      (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))
+     :dos      (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))
+     :read-fn  (read-fns protocol)
+     :write-fn (write-fns protocol)
+     :socket   socket}))
 
 (defn query [client q]
-  (io/dos-write (:dos client) q)
-  (let [result (io/dis-read (:dis client) io/eof)]
+  ((:write-fn client) (:dos client) q)
+  (let [result ((:read-fn client) (:dis client) io/eof)]
     (assert (not= result io/eof))
     result))
 
