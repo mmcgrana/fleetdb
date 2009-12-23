@@ -14,6 +14,18 @@
      :else
        (throw (Exception. "No cond matches."))))
 
+(defmacro condv [val-form & clauses]
+  (let [val-sym (gensym "v")]
+    `(let [~val-sym ~val-form]
+        (cond
+          ~@(apply concat
+              (map (fn [[pred-form then-form]]
+                     [(list pred-form val-sym) then-form])
+                   (partition 2 clauses)))
+          :else
+            (throw (IllegalArgumentException.
+                     (str "No matching clause: " ~val-sym)))))))
+
 (defn and? [coll]
   (cond
     (empty? coll) true
@@ -68,10 +80,6 @@
 
 (defn domap [f coll]
   (dorun (map f coll)))
-
-(defn vec-pad [v n e]
-  (let [d (- n (count v))]
-    (if (zero? d) v (apply conj v (repeat d e)))))
 
 (defn vec-map [f coll]
   (into [] (map f coll)))

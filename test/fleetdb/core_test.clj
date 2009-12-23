@@ -21,8 +21,7 @@
 
 (def- db1 (db-with :elems records nil))
 
-(def- db2 (db-with :elems records
-            [[[:lt :asc]] [[:num :asc] [:tp :asc]]]))
+(def- db2 (db-with :elems records [:lt [:num :tp]]))
 
 (deftest "select: no coll"
   (assert-nil (core/query db1 [:select :foos])))
@@ -32,11 +31,11 @@
 
 (deftest "select: ad-hoc single attr sort"
   (assert= [r1 r3 r2 r6 r4 r5]
-           (core/query db1 [:select :elems {:order [[:lt :asc]]}])))
-
-(deftest "select: ad-hoc abbreviated single attr sort"
-  (assert= [r1 r3 r2 r6 r4 r5]
            (core/query db1 [:select :elems {:order [:lt :asc]}])))
+
+(deftest "select: ad-hoc non-abbreviated single attr sort"
+  (assert= [r1 r3 r2 r6 r4 r5]
+           (core/query db1 [:select :elems {:order [[:lt :asc]]}])))
 
 (deftest "select: ad-hoc multi attr sort"
   (assert= [r2 r3 r1 r5 r4 r6]
@@ -46,7 +45,7 @@
 (deftest "select: sort, offset, and limit"
   (assert= [r2 r6 r4]
            (core/query db1
-              [:select :elems {:order [[:lt :asc]] :offset 2 :limit 3}])))
+              [:select :elems {:order [:lt :asc] :offset 2 :limit 3}])))
 
 (deftest "select: by id"
   (assert= [r4]
@@ -116,52 +115,50 @@
 
 (deftest "find: many ids with order"
   (assert-find
-    {:where [:in :id [2 3 4]] :order [[:lt :asc]]}
-    [:sort [[:lt :asc]]
+    {:where [:in :id [2 3 4]] :order [:lt :asc]}
+    [:sort [:lt :asc]
       [:record-multilookup [:elems [2 3 4]]]]))
 
 (deftest "find: many opts"
   (assert-find
-    {:where [:= :tp :a] :order [[:lt :asc]] :limit 3 :offset 6 :only [:id :lt]}
+    {:where [:= :tp :a] :order [:lt :asc] :limit 3 :offset 6 :only [:id :lt]}
     [:only [:id :lt]
        [:limit 3
          [:offset 6
-           [:sort [[:lt :asc]]
+           [:sort [:lt :asc]
              [:filter [:= :tp :a]
                [:record-scan :elems]]]]]]
     [:only [:id :lt]
        [:limit 3
          [:offset 6
            [:filter [:= :tp :a]
-             [:index-seq [:elems [[:lt :asc]]
-                          :left-right :neg-inf true :pos-inf true]]]]]]))
+             [:index-seq [:elems :lt :left-right :neg-inf true :pos-inf true]]]]]]))
 
 (deftest "find: union"
-   (assert-find {:where [:or [:= :lt "a"] [:= :num 2]] :order [[:tp :asc]]}
-     [:union [[:tp :asc]]
-       [[:sort [[:tp :asc]]
+   (assert-find {:where [:or [:= :lt "a"] [:= :num 2]] :order [:tp :asc]}
+     [:union [:tp :asc]
+       [[:sort [:tp :asc]
           [:filter [:= :lt "a"]
             [:record-scan :elems]]]
-        [:sort [[:tp :asc]]
+        [:sort [:tp :asc]
           [:filter [:= :num 2]
             [:record-scan :elems]]]]]
-     [:union [[:tp :asc]]
-       [[:sort [[:tp :asc]]
-          [:index-lookup [:elems [[:lt :asc]] "a"]]]
-        [:index-seq [:elems [[:num :asc] [:tp :asc]]
-                       :left-right [2 :neg-inf] true [2 :pos-inf] true]]]]))
+     [:union [:tp :asc]
+       [[:sort [:tp :asc]
+          [:index-lookup [:elems :lt "a"]]]
+        [:index-seq [:elems [:num :tp] :left-right [2 :neg-inf] true [2 :pos-inf] true]]]]))
 
 (deftest "find: attr equality"
   (assert-find {:where [:= :lt "a"]}
     [:filter [:= :lt "a"]
       [:record-scan :elems]]
-    [:index-lookup [:elems [[:lt :asc]] "a"]]))
+    [:index-lookup [:elems :lt "a"]]))
 
 (deftest "find: attr range"
   (assert-find {:where [:> :lt "c"]}
     [:filter [:> :lt "c"]
       [:record-scan :elems]]
-    [:index-seq [:elems [[:lt :asc]] :left-right "c" false :pos-inf true]]))
+    [:index-seq [:elems :lt :left-right "c" false :pos-inf true]]))
 
 (deftest "find: attr equality when index obscured"
   (assert-find {:where [:= :tp :a]}
@@ -172,57 +169,55 @@
   (assert-find {:where [:and [:= :num 2] [:= :tp :a]]}
     [:filter [:and [:= :num 2] [:= :tp :a]]
       [:record-scan :elems]]
-    [:index-lookup [:elems [[:num :asc] [:tp :asc]] [2 :a]]]))
+    [:index-lookup [:elems [:num :tp] [2 :a]]]))
 
 (deftest "find: multi-attr range"
   (assert-find {:where [:and [:= :num 2] [:>= :tp :a]]}
     [:filter [:and [:= :num 2] [:>= :tp :a]]
       [:record-scan :elems]]
-    [:index-seq [:elems [[:num :asc] [:tp :asc]]
+    [:index-seq [:elems [:num :tp]
                    :left-right [2 :a] true [2 :pos-inf] true]]))
 
 (deftest "find: index order left right"
-  (assert-find {:order [[:lt :asc]]}
-    [:sort [[:lt :asc]]
+  (assert-find {:order [:lt :asc]}
+    [:sort [:lt :asc]
       [:record-scan :elems]]
-    [:index-seq [:elems [[:lt :asc]] :left-right :neg-inf true :pos-inf true]]))
+    [:index-seq [:elems :lt :left-right :neg-inf true :pos-inf true]]))
 
 (deftest "find: index order right left"
-  (assert-find {:order [[:lt :desc]]}
-    [:sort [[:lt :desc]]
+  (assert-find {:order [:lt :desc]}
+    [:sort [:lt :desc]
       [:record-scan :elems]]
-    [:index-seq [:elems [[:lt :asc]] :right-left :neg-inf true :pos-inf true]]))
+    [:index-seq [:elems :lt :right-left :neg-inf true :pos-inf true]]))
 
 (deftest "find: index order trailing attrs"
-  (assert-find {:where [:= :tp :a] :order [[:num :desc]]}
-    [:sort [[:num :desc]]
+  (assert-find {:where [:= :tp :a] :order [:num :desc]}
+    [:sort [:num :desc]
       [:filter [:= :tp :a]
         [:record-scan :elems]]]
     [:filter [:= :tp :a]
-      [:index-seq [:elems [[:num :asc] [:tp :asc]]
-                     :right-left [:neg-inf :neg-inf] true [:pos-inf :pos-inf] true]]]))
+      [:index-seq [:elems [:num :tp] :right-left [:neg-inf :neg-inf] true [:pos-inf :pos-inf] true]]]))
 
 (deftest "find: index lookup and order"
-  (assert-find {:where [:= :num 2] :order [[:tp :desc]]}
-    [:sort [[:tp :desc]]
+  (assert-find {:where [:= :num 2] :order [:tp :desc]}
+    [:sort [:tp :desc]
       [:filter [:= :num 2]
         [:record-scan :elems]]]
-    [:index-seq [:elems [[:num :asc] [:tp :asc]]
-                  :right-left [2 :neg-inf] true [2 :pos-inf] true]]))
+    [:index-seq [:elems [:num :tp] :right-left [2 :neg-inf] true [2 :pos-inf] true]]))
 
 (deftest "find: index lookup with remnant filter"
   (assert-find {:where [:and [:> :lt "b"] [:= :tp :a]]}
     [:filter [:and [:> :lt "b"] [:= :tp :a]]
       [:record-scan :elems]]
     [:filter [:= :tp :a]
-      [:index-seq [:elems [[:lt :asc]] :left-right "b" false :pos-inf true]]]))
+      [:index-seq [:elems :lt :left-right "b" false :pos-inf true]]]))
 
 (deftest "find: index most useful"
   (assert-find {:where [:and [:= :lt "a"] [:= :num 1] [:= :tp :a]]}
     [:filter [:and [:= :lt "a"] [:= :num 1] [:= :tp :a]]
       [:record-scan :elems]]
     [:filter [:= :lt "a"]
-      [:index-lookup [:elems [[:num :asc] [:tp :asc]] [1 :a]]]]))
+      [:index-lookup [:elems [:num :tp] [1 :a]]]]))
 
 (deftest "count: empty"
   (assert= 0 (core/query db1 [:count :foos])))
@@ -326,27 +321,27 @@
   (assert= [] (core/query (core/init) [:list-collections])))
 
 (deftest "list-collections: records and indexes"
-  (let [[db1-1 _] (core/query db1 [:create-index :foos [[:name :asc]]])]
+  (let [[db1-1 _] (core/query db1 [:create-index :foos :name])]
     (assert-set= [:elems :foos] (core/query db1-1 [:list-collections]))))
 
 (deftest "create-/drop-index"
-  (let [[db1-1 r1 ] (core/query db1   [:create-index :elems [[:name :asc]]])
-        [_     r1d] (core/query db1-1 [:create-index :elems [[:name :asc]]])
-        [db1-2 r2 ] (core/query db1-1 [:drop-index   :elems [[:name :asc]]])
-        [_     r2d] (core/query db1-2 [:drop-index   :elems [[:name :asc]]])]
+  (let [[db1-1 r1 ] (core/query db1   [:create-index :elems :name])
+        [_     r1d] (core/query db1-1 [:create-index :elems :name])
+        [db1-2 r2 ] (core/query db1-1 [:drop-index   :elems :name])
+        [_     r2d] (core/query db1-2 [:drop-index   :elems :name])]
     (assert= r1  1)
     (assert= r1d 0)
     (assert= r2  1)
     (assert= r2d 0)
-    (assert= [[[:name :asc]]] (core/query db1-1 [:list-indexes :elems]))
+    (assert= [:name] (core/query db1-1 [:list-indexes :elems]))
     (assert-nil (core/query db1-2 [:list-indexes :elems]))))
 
 (deftest "list-indexes: none"
   (assert-nil (core/query db1 [:list-indexes :foos])))
 
 (deftest "list-indexes: some"
-  (let [[db1-1 _] (core/query db1   [:create-index :elems [[:name :asc]]])
-        [db1-2 _] (core/query db1-1 [:create-index :elems [[:age :asc] [:height :asc]]])
+  (let [[db1-1 _] (core/query db1   [:create-index :elems :name])
+        [db1-2 _] (core/query db1-1 [:create-index :elems [:age :height]])
         [db1-3 _] (core/query db1-2 [:create-index :elems [[:age :desc] [:height :asc]]])]
-    (assert= (set [[[:name :asc]] [[:age :asc] [:height :asc]] [[:age :desc] [:height :asc]]])
+    (assert= (set [:name [:age :height] [[:age :desc] [:height :asc]]])
              (set (core/query db1-3 [:list-indexes :elems])))))

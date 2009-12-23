@@ -38,7 +38,7 @@
         (embedded/query dba-0 [:delete :elems {:where [:= :id i]}])))
     (let [pre-compact-size (file/size log-path)]
       (embedded/compact dba-0)
-      (Thread/sleep 500)
+      (Thread/sleep 100)
       (let [post-compact-size (file/size log-path)]
         (assert-that (< post-compact-size pre-compact-size)))))
   (with-dba [dba-1 (embedded/load-persistent log-path)]

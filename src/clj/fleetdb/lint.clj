@@ -83,10 +83,10 @@
            (domap lint-where sub-wheres))
        (= :in op)
          (do
-           (lint #(= 3 (count %)) where "wrong number of elems in where clause")
+           (lint #(= 3 (count %)) where ":in clause has 2 arguments")
            (let [[_ attr vals] where]
              (lint-attr attr)
-             (lint vector? vals "vals for in must be in a vector")
+             (lint vector? vals "vals for :in must be in a vector")
              (domap lint-val vals)))
        :else
          (fail "unrecognized where operation" op))))
@@ -116,12 +116,20 @@
   (lint val? i "invalid id"))
 
 (defn- lint-ispec [ispec]
-  ; not implemented
-  )
-
-(defn- lint-result [result]
-  ; not implemented
-  )
+  (cond
+    (keyword? ispec) :ok
+    (vector? ispec)
+      (doseq [ispec-comp ispec]
+        (cond
+          (keyword? ispec-comp) :ok
+          (vector? ispec-comp)
+            (lint #(= 2 (count %)) ispec-comp "index spec component vector must have 2 elements")
+            (lint-attr (first ispec-comp))
+            (lint-dir  (second ispec-comp)))
+          :else
+            (fail "index spec component must be a keyword or vector" ispec-comp))
+    :else
+      (fail "index spec must be a keyword or vector" ispec)))
 
 (defn lint-num-args [n q]
   (if (integer? n)
@@ -214,7 +222,6 @@
   (lint-num-args 3 q)
   (let [[_ read-query expected-result write-query] q]
     (lint-read-query read-query)
-    (lint-result expected-result)
     (lint-write-query write-query)))
 
 (defn lint-query [q]
@@ -238,16 +245,13 @@
       (fail "unrecognized query type" (first q)))))
 
 (defn- lint-read-query [q]
-  (lint #{:get :select :count :multi-read} (first q)
+  (lint #{:get :select :count :explain :list-collections :list-indexes :multi-read}
+        (first q)
         "query not a read query")
   (lint-query q))
 
 (defn- lint-write-query [q]
-  (lint #{:insert :update :delete :create-index :drop-index} (first q)
+  (lint #{:insert :update :delete :create-index :drop-index :multi-write :checked-write}
+        (first q)
         "query not a write query")
   (lint-query q))
-
-
-; :insert :get :select :count :update :delete :explain :list-collections
-; :create-index :drop-index :list-indexes :multi-read :multi-write
-; :checked-write

@@ -13,47 +13,48 @@
 (defn- normalize-order [order]
   (if (keyword? (first order)) [order] order))
 
+(defn- normalize-ispec [ispec]
+  (if (keyword? ispec)
+    [[ispec :asc]]
+    (vec-map
+      (fn [ispec-comp]
+        (if (keyword? ispec-comp) [ispec-comp :asc] ispec-comp))
+      ispec)))
+
 (defn- record-compare [order]
   (let [norder (normalize-order order)]
     (if (= 1 (count norder))
       (let [[attr dir] (first norder)]
-        (cond!
-          (= dir :asc)
-            #(Compare/compare (attr %1) (attr %2))
-          (= dir :desc)
-            #(Compare/compare (attr %2) (attr %1))))
+        (condp = dir
+          :asc  #(Compare/compare (attr %1) (attr %2))
+          :desc #(Compare/compare (attr %2) (attr %1))))
       (let [[[attr dir] & rorder] norder
             rcompare              (record-compare rorder)]
-        (cond!
-          (= dir :asc)
-            #(let [c (Compare/compare (attr %1) (attr %2))]
-               (if (zero? c) (rcompare %1 %2) c))
-          (= dir :desc)
-            #(let [c (Compare/compare (attr %2) (attr %1))]
-               (if (zero? c) (rcompare %1 %2) c)))))))
+        (condp = dir
+          :asc  #(let [c (Compare/compare (attr %1) (attr %2))]
+                   (if (zero? c) (rcompare %1 %2) c))
+          :desc #(let [c (Compare/compare (attr %2) (attr %1))]
+                   (if (zero? c) (rcompare %1 %2) c)))))))
 
-(defn- attr-compare [order]
-  (if (= 1 (count order))
-    (let [[attr dir] (first order)]
-      (cond!
-        (= dir :asc)
-          #(Compare/compare %1 %2)
-        (= dir :desc)
-          #(Compare/compare %2 %1)))
-    (let [[[attr dir] & rorder] order
-          rcompare (attr-compare rorder)
-          next-fn  (if (= 1 (count rorder)) #(first (rest %)) rest)]
-      (cond!
-        (= dir :asc)
-          #(let [c (Compare/compare (first %1) (first %2))]
-             (if (zero? c)
-               (rcompare (next-fn %1) (next-fn %2))
-               c))
-        (= dir :desc)
-          #(let [c (Compare/compare (first %1) (first %2))]
-             (if (zero? c)
-               (rcompare (next-fn %1) (next-fn %2))
-                 c))))))
+(defn- attr-compare [ispec]
+  (let [nispec (normalize-ispec ispec)]
+    (if (= 1 (count nispec))
+      (let [[attr dir] (first nispec)]
+        (condp = dir
+          :asc  #(Compare/compare %1 %2)
+          :desc #(Compare/compare %2 %1)))
+      (let [[[attr dir] & rispec] nispec
+            rcompare (attr-compare rispec)
+            next-fn  (if (= 1 (count rispec)) #(first (rest %)) rest)]
+        (condp = dir
+          :asc  #(let [c (Compare/compare (first %1) (first %2))]
+                   (if (zero? c)
+                     (rcompare (next-fn %1) (next-fn %2))
+                     c))
+          :desc #(let [c (Compare/compare (first %1) (first %2))]
+                   (if (zero? c)
+                     (rcompare (next-fn %1) (next-fn %2))
+                     c)))))))
 
 
 ;; Find planning
@@ -69,9 +70,8 @@
     (filter-plan where)
     (sort-plan order)))
 
-(defn- index-order-prefix? [ispec order]
-  (= (take (count order) ispec)
-     order))
+(defn- index-order-prefix? [nispec order]
+  (= (take (count order) nispec) order))
 
 (def- flip-idir
   {:asc :desc :desc :asc})
@@ -97,8 +97,9 @@
       :multi-cond         (vec (cons :and conds)))))
 
 (defn- conds-order-ipplan [ispec eq ineq other where order]
-  (let [[rispec left-val left-inc right-val right-inc where-count where-left]
-    (loop [rispec ispec left-val [] right-val [] where-count 0 eq-left eq]
+  (let [nispec (normalize-ispec ispec)
+        [rispec left-val left-inc right-val right-inc where-count where-left]
+    (loop [rispec nispec left-val [] right-val [] where-count 0 eq-left eq]
       (if-not rispec
         [nil left-val true right-val true where-count (build-where-left eq-left ineq other)]
         (let [[icattr icdir] (first rispec)
@@ -123,7 +124,7 @@
           [nil (count norder) :right-left]
         :else
           [order 0 :left-right])]
-      (let [[left-val right-val] (val-pad left-val right-val ispec)]
+      (let [[left-val right-val] (val-pad left-val right-val nispec)]
         {:ispec       ispec
          :where-count where-count
          :order-count order-count
@@ -170,16 +171,16 @@
   (reduce
     (fn [[eq ineq other] acond]
       (let [[cop cattr cval] acond]
-        (cond!
-          (eq-op? cop)
+        (condv cop
+          eq-op?
             (if (contains? eq cattr)
               (raise "duplicate equality on " cattr)
               [(assoc eq cattr [cval acond]) ineq other])
-          (ineq-op? cop)
+          ineq-op?
             (if (contains? ineq cattr)
               (raise "duplicate inequality on " cattr)
               [eq (assoc ineq cattr [(cond-low-high cop cval) acond]) other])
-          (other-op? cop)
+          other-op?
             [eq ineq (conj other acond)])))
     [{} {} []]
     conds))
@@ -189,7 +190,8 @@
     (map #(conds-order-ipplan % eq ineq other where order) ispecs)))
 
 (defn- ipplan-compare [a b]
-  (compare [(:where-count a) (:order-count a)] [(:where-count b) (:order-count b)]))
+  (compare [(:where-count a) (:order-count a)]
+           [(:where-count b) (:order-count b)]))
 
 (defn- ipplan-useful? [ipplan]
   (pos? (+ (:where-count ipplan) (:order-count ipplan))))
@@ -238,9 +240,9 @@
 (defn- find-plan [coll ispecs opts]
   (let [{:keys [where order offset limit only]} opts]
     (-> (where-order-plan coll ispecs where order)
-     (offset-plan offset)
-     (limit-plan  limit)
-     (only-plan   only))))
+      (offset-plan offset)
+      (limit-plan  limit)
+      (only-plan   only))))
 
 
 ;; Find execution
@@ -302,10 +304,10 @@
   (take limit (exec-plan db source)))
 
 (defmethod exec-plan :only [db [_ only source]]
-  (cond!
-    (vector? only)
+  (condv only
+    vector?
       (map (fn [r] (vec-map #(% r) only)) (exec-plan db source))
-    (keyword? only)
+    keyword?
       (map only (exec-plan db source))))
 
 (defmethod exec-plan :union [db [_ order sources]]
@@ -388,11 +390,12 @@
   (dissoc rmap (:id old-record)))
 
 (defn- ispec-on-fn [ispec]
-  (let [attrs  (map first ispec)
-        nattrs (count ispec)]
-    (cond!
-      (= nattrs 1) (first attrs)
-      (> nattrs 1) #(vec (map % attrs)))))
+  (let [nispec (normalize-ispec ispec)]
+    (let [attrs  (map first nispec)
+          nattrs (count nispec)]
+      (cond!
+        (= nattrs 1) (first attrs)
+        (> nattrs 1) #(vec (map % attrs))))))
 
 (defn- index-insert [index on-fn record]
   (update index (on-fn record)
@@ -407,12 +410,11 @@
         indexed (get index aval)]
     (update index aval
       (fn [indexed]
-        (cond!
-          (set? indexed) (do
-                           (assert (contains? indexed record))
-                           (disj indexed record))
-          (map? indexed) (do (assert (= indexed record))
-                           nil))))))
+        (condv indexed
+          set? (do (assert (contains? indexed record))
+                   (disj indexed record))
+          map? (do (assert (= indexed record))
+                   nil))))))
 
 (defn- index-build [records ispec]
   (let [on-fn (ispec-on-fn ispec)]
@@ -488,11 +490,8 @@
        (imap-delete int-imap old-record)])))
 
 (defmethod query* :explain [db [_ [query-type coll e3 e4]]]
-  (cond
-    (#{:select :count :delete} query-type)
-      (find-plan coll (coll-ispecs db coll) e3)
-    (= :update query-type)
-      (find-plan coll (coll-ispecs db coll) e4)))
+  (find-plan coll (coll-ispecs db coll)
+    (if (= :update query-type) e4 e3)))
 
 (defmethod query* :list-collections [db _]
   (map first
