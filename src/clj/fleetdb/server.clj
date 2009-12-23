@@ -15,7 +15,7 @@
     (condp = q-type
       :ping     "pong"
       :compact  (embedded/compact dba)
-      :snapshot (embedded/snapshot dba q-opts)
+      :snapshot (embedded/snapshot dba q-opt)
       nil)))
 
 (defn- core-query [dba q]

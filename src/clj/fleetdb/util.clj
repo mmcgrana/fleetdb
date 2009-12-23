@@ -8,6 +8,12 @@
   [name & decls]
   (list* `defmulti (vary-meta name assoc :private true) decls))
 
+(defmacro cond! [& clauses]
+  `(cond
+     ~@clauses
+     :else
+       (throw (Exception. "No cond matches."))))
+
 (defn and? [coll]
   (cond
     (empty? coll) true
@@ -22,6 +28,9 @@
 
 (defn ? [val]
   (if val true false))
+
+(defn boolean? [x]
+  (instance? Boolean x))
 
 (defn- raise-excp [#^String msg]
   (proxy [Exception] [msg]
@@ -56,6 +65,9 @@
 
 (defn compact [coll]
   (filter #(not (nil? %)) coll))
+
+(defn domap [f coll]
+  (dorun (map f coll)))
 
 (defn vec-pad [v n e]
   (let [d (- n (count v))]

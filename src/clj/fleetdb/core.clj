@@ -1,7 +1,8 @@
 (ns fleetdb.core
   (:import (clojure.lang Numbers Sorted IDeref)
            (fleetdb Compare))
-  (:require (clojure.contrib [core :as core]))
+  (:require (clojure.contrib [core :as core])
+            (fleetdb [lint :as lint]))
   (:use (fleetdb util)))
 
 ;; General ordering
@@ -13,39 +14,33 @@
   (assert order)
   (if (= 1 (count order))
     (let [[attr dir] (first order)]
-      (cond
+      (cond!
         (= dir :asc)
           #(Compare/compare (attr %1) (attr %2))
         (= dir :desc)
-          #(Compare/compare (attr %2) (attr %1))
-        :else
-          (raise "invalid order " order)))
+          #(Compare/compare (attr %2) (attr %1))))
     (let [[[attr dir] & rorder] order
           rcompare              (record-compare rorder)]
-      (cond
+      (cond!
         (= dir :asc)
           #(let [c (Compare/compare (attr %1) (attr %2))]
              (if (zero? c) (rcompare %1 %2) c))
         (= dir :desc)
           #(let [c (Compare/compare (attr %2) (attr %1))]
-             (if (zero? c) (rcompare %1 %2) c))
-        :else
-          (raise "invalid order " order)))))
+             (if (zero? c) (rcompare %1 %2) c))))))
 
 (defn- attr-compare [order]
   (if (= 1 (count order))
     (let [[attr dir] (first order)]
-      (cond
+      (cond!
         (= dir :asc)
           #(Compare/compare %1 %2)
         (= dir :desc)
-          #(Compare/compare %2 %1)
-        :else
-          (raise "invalid order " order)))
+          #(Compare/compare %2 %1)))
     (let [[[attr dir] & rorder] order
           rcompare (attr-compare rorder)
           next-fn  (if (= 1 (count rorder)) #(first (rest %)) rest)]
-      (cond
+      (cond!
         (= dir :asc)
           #(let [c (Compare/compare (first %1) (first %2))]
              (if (zero? c)
@@ -55,9 +50,7 @@
           #(let [c (Compare/compare (first %1) (first %2))]
              (if (zero? c)
                (rcompare (next-fn %1) (next-fn %2))
-                 c))
-        :else
-          (raise "invalid order " order)))))
+                 c))))))
 
 
 ;; Find planning
@@ -173,7 +166,7 @@
   (reduce
     (fn [[eq ineq other] acond]
       (let [[cop cattr cval] acond]
-        (cond
+        (cond!
           (eq-op? cop)
             (if (contains? eq cattr)
               (raise "duplicate equality on " cattr)
@@ -183,9 +176,7 @@
               (raise "duplicate inequality on " cattr)
               [eq (assoc ineq cattr [(cond-low-high cop cval) acond]) other])
           (other-op? cop)
-            [eq ineq (conj other acond)]
-          :else
-            (raise "invalid where " acond))))
+            [eq ineq (conj other acond)])))
     [{} {} []]
     conds))
 
@@ -241,8 +232,6 @@
   (if only [:only only source] source))
 
 (defn- find-plan [coll ispecs opts]
-  (rassert (or (nil? opts) (map? opts))
-    "Unrecognized find options: " (pr-str opts))
   (let [{:keys [where order offset limit only]} opts]
     (-> (where-order-plan coll ispecs where order)
      (offset-plan offset)
@@ -270,7 +259,7 @@
    :>=<= [(sing-op-fns :>=) (sing-op-fns :<=)]})
 
 (defn- where-pred [[op & wrest]]
-  (cond
+  (cond!
     (conj-op-fns op)
       (let [subpreds (map #(where-pred %) wrest)
             conj-op-fn  (conj-op-fns op)]
@@ -292,9 +281,7 @@
       (let [[attr aval-vec] wrest
             aval-set        (set aval-vec)]
         (fn [record]
-          (contains? aval-set (attr record))))
-    :else
-      (raise "where op " op " not recognized")))
+          (contains? aval-set (attr record))))))
 
 (defmulti- exec-plan (fn [db [plan-type _]] plan-type))
 
@@ -311,13 +298,11 @@
   (take limit (exec-plan db source)))
 
 (defmethod exec-plan :only [db [_ only source]]
-  (cond
+  (cond!
     (vector? only)
       (map (fn [r] (vec-map #(% r) only)) (exec-plan db source))
     (keyword? only)
-      (map only (exec-plan db source))
-    :other
-      (raise "Unrecognized :only value: " only)))
+      (map only (exec-plan db source))))
 
 (defmethod exec-plan :union [db [_ order sources]]
   (uniq
@@ -399,11 +384,11 @@
   (dissoc rmap (:id old-record)))
 
 (defn- ispec-on-fn [ispec]
-  (let [attrs (map first ispec)]
-    (cond
-      (empty? attrs)      (raise "empty ispec: " ispec)
-      (= 1 (count attrs)) (first attrs)
-      :multi-attr         #(vec (map % attrs)))))
+  (let [attrs  (map first ispec)
+        nattrs (count ispec)]
+    (cond!
+      (= nattrs 1) (first attrs)
+      (> nattrs 1) #(vec (map % attrs)))))
 
 (defn- index-insert [index on-fn record]
   (update index (on-fn record)
@@ -418,12 +403,11 @@
         indexed (get index aval)]
     (update index aval
       (fn [indexed]
-        (cond
-          (nil? indexed) (raise "missing record")
+        (cond!
           (set? indexed) (do
                            (assert (contains? indexed record))
                            (disj indexed record))
-          :single-record (do (assert (= indexed record))
+          (map? indexed) (do (assert (= indexed record))
                            nil))))))
 
 (defn- index-build [records ispec]
@@ -455,21 +439,21 @@
 
 ;; Query implementations
 
-(defmulti query (fn [db [query-type opts]] query-type))
+(defmulti query* (fn [db q] (first q)))
 
-(defmethod query :default [_ [query-type]]
+(defmethod query* :default [_ [query-type]]
   (raise "Invalid query type: " query-type))
 
-(defmethod query :select [db [_ coll opts]]
+(defmethod query* :select [db [_ coll opts]]
   (find-records db coll opts))
 
-(defmethod query :get [db [_ coll id-s]]
+(defmethod query* :get [db [_ coll id-s]]
   (if-let [rmap (get-in db [coll :rmap])]
     (if (vector? id-s)
       (compact (map #(rmap %) id-s))
       (rmap id-s))))
 
-(defmethod query :count [db [_ coll opts]]
+(defmethod query* :count [db [_ coll opts]]
   (count (find-records db coll opts)))
 
 (defn- db-apply [db coll records apply-fn]
@@ -480,73 +464,75 @@
     [(assoc db coll {:rmap new-rmap :imap new-imap})
      (count records)]))
 
-(defmethod query :insert [db [_ coll record-s]]
+(defmethod query* :insert [db [_ coll record-s]]
   (db-apply db coll (if (map? record-s) (list record-s) record-s)
     (fn [[int-rmap int-imap] record]
       [(rmap-insert int-rmap record)
        (imap-insert int-imap record)])))
 
-(defmethod query :update [db [_ coll with opts]]
+(defmethod query* :update [db [_ coll with opts]]
   (db-apply db coll (find-records db coll opts)
     (fn [[int-rmap int-imap] old-record]
       (let [new-record (merge-compact old-record with)]
         [(rmap-update int-rmap old-record new-record)
          (imap-update int-imap old-record new-record)]))))
 
-(defmethod query :delete [db [_ coll opts]]
+(defmethod query* :delete [db [_ coll opts]]
   (db-apply db coll (find-records db coll opts)
     (fn [[int-rmap int-imap] old-record]
       [(rmap-delete int-rmap old-record)
        (imap-delete int-imap old-record)])))
 
-(defmethod query :explain [db [_ [query-type coll e3 e4]]]
+(defmethod query* :explain [db [_ [query-type coll e3 e4]]]
   (cond
     (#{:select :count :delete} query-type)
       (find-plan coll (coll-ispecs db coll) e3)
     (= :update query-type)
-      (find-plan coll (coll-ispecs db coll) e4)
-    :invalid
-      (raise "Cannot explain query type " query-type)))
+      (find-plan coll (coll-ispecs db coll) e4)))
 
-(defmethod query :list-collections [db _]
+(defmethod query* :list-collections [db _]
   (map first
     (filter
       (fn [[coll {rmap :rmap imap :imap}]]
         (or (not (empty? rmap)) (not (empty? imap))))
       db)))
 
-(defmethod query :create-index [db [_ coll ispec]]
+(defmethod query* :create-index [db [_ coll ispec]]
   (if (get-in db [coll :imap ispec])
     [db 0]
     (let [records (vals (get-in db [coll :rmap]))
           index   (index-build records ispec)]
       [(assoc-in db [coll :imap ispec] index) 1])))
 
-(defmethod query :drop-index [db [_ coll ispec]]
+(defmethod query* :drop-index [db [_ coll ispec]]
   (if-not (get-in db [coll :imap ispec])
     [db 0]
     [(core/dissoc-in db [coll :imap ispec]) 1]))
 
-(defmethod query :list-indexes [db [_ coll]]
+(defmethod query* :list-indexes [db [_ coll]]
   (keys (get-in db [coll :imap])))
 
-(defmethod query :multi-read [db [_ queries]]
-  (vec (map #(query db %) queries)))
+(defmethod query* :multi-read [db [_ queries]]
+  (vec (map #(query* db %) queries)))
 
-(defmethod query :multi-write [db [_ queries]]
+(defmethod query* :multi-write [db [_ queries]]
   (reduce
     (fn [[int-db int-results] q]
-      (let [[aug-db result] (query int-db q)]
+      (let [[aug-db result] (query* int-db q)]
         [aug-db (conj int-results result)]))
     [db []]
     queries))
 
-(defmethod query :checked-write [db [_ check expected write]]
-  (let [actual (query db check)]
+(defmethod query* :checked-write [db [_ check expected write]]
+  (let [actual (query* db check)]
     (if (= actual expected)
-      (let [[new-db result] (query db write)]
+      (let [[new-db result] (query* db write)]
         [new-db [true result]])
       [db [false actual]])))
+
+(defn query [db q]
+  (lint/lint-query q)
+  (query* db q))
 
 (defn init []
   {})
