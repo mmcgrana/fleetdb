@@ -41,13 +41,17 @@
   (lint #(and (integer? %) (pos? %)) i
     (str type " not a positive integer")))
 
+(defn- lint-order-comp [order-comp]
+  (lint vector? order-comp "order component not a vector")
+  (lint #(= 2 (count %)) order-comp "order component should have 2 elements")
+  (lint-attr (first order-comp))
+  (lint-dir (second order-comp)))
+
 (defn- lint-order [order]
   (lint vector? order "order not a vector")
-  (doseq [order-comp order]
-    (lint vector? order-comp "order component not a vector")
-    (lint #(= 2 (count %)) order-comp "order component should have 2 elements")
-    (lint-attr (first order-comp))
-    (lint-dir (second order-comp))))
+  (if (keyword? (first order))
+    (lint-order-comp order)
+    (domap lint-order-comp order)))
 
 (def- sing-ops #{:= :!= :< :<= :> :>=})
 (def- doub-ops #{:>< :>=< :><= :>=<=})

@@ -34,6 +34,10 @@
   (assert= [r1 r3 r2 r6 r4 r5]
            (core/query db1 [:select :elems {:order [[:lt :asc]]}])))
 
+(deftest "select: ad-hoc abbreviated single attr sort"
+  (assert= [r1 r3 r2 r6 r4 r5]
+           (core/query db1 [:select :elems {:order [:lt :asc]}])))
+
 (deftest "select: ad-hoc multi attr sort"
   (assert= [r2 r3 r1 r5 r4 r6]
            (core/query db1 [:select :elems

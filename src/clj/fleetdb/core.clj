@@ -10,24 +10,27 @@
 (def- neg-inf :neg-inf)
 (def- pos-inf :pos-inf)
 
+(defn- normalize-order [order]
+  (if (keyword? (first order)) [order] order))
+
 (defn- record-compare [order]
-  (assert order)
-  (if (= 1 (count order))
-    (let [[attr dir] (first order)]
-      (cond!
-        (= dir :asc)
-          #(Compare/compare (attr %1) (attr %2))
-        (= dir :desc)
-          #(Compare/compare (attr %2) (attr %1))))
-    (let [[[attr dir] & rorder] order
-          rcompare              (record-compare rorder)]
-      (cond!
-        (= dir :asc)
-          #(let [c (Compare/compare (attr %1) (attr %2))]
-             (if (zero? c) (rcompare %1 %2) c))
-        (= dir :desc)
-          #(let [c (Compare/compare (attr %2) (attr %1))]
-             (if (zero? c) (rcompare %1 %2) c))))))
+  (let [norder (normalize-order order)]
+    (if (= 1 (count norder))
+      (let [[attr dir] (first norder)]
+        (cond!
+          (= dir :asc)
+            #(Compare/compare (attr %1) (attr %2))
+          (= dir :desc)
+            #(Compare/compare (attr %2) (attr %1))))
+      (let [[[attr dir] & rorder] norder
+            rcompare              (record-compare rorder)]
+        (cond!
+          (= dir :asc)
+            #(let [c (Compare/compare (attr %1) (attr %2))]
+               (if (zero? c) (rcompare %1 %2) c))
+          (= dir :desc)
+            #(let [c (Compare/compare (attr %2) (attr %1))]
+               (if (zero? c) (rcompare %1 %2) c)))))))
 
 (defn- attr-compare [order]
   (if (= 1 (count order))
@@ -109,14 +112,15 @@
                   [rrispec (conj left-val low-v)  low-i  (conj right-val high-v) high-i (inc where-count) w-left]
                   [rrispec (conj left-val high-v) high-i (conj right-val low-v)  low-i  (inc where-count) w-left]))
               [rispec left-val true right-val true where-count (build-where-left eq-left ineq other)])))))]
-    (let [[order-left order-count sdir]
+    (let [norder (normalize-order order)
+          [order-left order-count sdir]
       (cond
-        (empty? order)
+        (empty? norder)
           [nil 0 :left-right]
-        (index-order-prefix? rispec order)
-          [nil (count order) :left-right]
-        (index-order-prefix? rispec (flip-order order))
-          [nil (count order) :right-left]
+        (index-order-prefix? rispec norder)
+          [nil (count norder) :left-right]
+        (index-order-prefix? rispec (flip-order norder))
+          [nil (count norder) :right-left]
         :else
           [order 0 :left-right])]
       (let [[left-val right-val] (val-pad left-val right-val ispec)]
@@ -306,8 +310,8 @@
 
 (defmethod exec-plan :union [db [_ order sources]]
   (uniq
-    (sort (record-compare (or order [[:id :asc]]))
-      (apply concat (map #(exec-plan db %) sources)))))
+    (sort (record-compare (or order [:id :asc]))
+          (apply concat (map #(exec-plan db %) sources)))))
 
 (defmethod exec-plan :record-lookup [db [_ [coll id]]]
   (if-let [record (get-in db [coll :rmap id])]
