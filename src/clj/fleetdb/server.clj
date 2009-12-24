@@ -8,7 +8,8 @@
                      PrintWriter    BufferedWriter OutputStreamWriter
                      DataInputStream  BufferedInputStream
                      DataOutputStream BufferedOutputStream)
-            (joptsimple OptionParser OptionSet OptionException)))
+            (joptsimple OptionParser OptionSet OptionException))
+  (:gen-class))
 
 (defn- embedded-query [dba q]
   (let [[q-type q-opt] q]
@@ -113,24 +114,27 @@
 (defn- parse-int [s]
   (and s (Integer/decode s)))
 
-(let [opt-parser (OptionParser. "f:ep:a:t:i:h")
-      arg-array  (into-array String *command-line-args*)
-      opt-set    (.parse opt-parser arg-array)]
-  (cond
-    (not-any? #(.has opt-set #^String %) ["f" "e" "p" "a" "t" "i" "h"])
-      (print-help)
-    (.has opt-set "h")
-      (print-help)
-    (not (empty? (.nonOptionArguments opt-set)))
-      (printf "Unrecognized option '%s'. Use -h for help.\n"
-              (first (.nonOptionArguments opt-set)))
-    (not (or (.has opt-set "f") (.has opt-set "e")))
-      (println "You must specify either -e or -f <path>. Use -h for help.")
-    :else
-      (let [db-path   (.valueOf opt-set "f")
-            ephemeral (.has opt-set "e")
-            port      (or (parse-int (.valueOf opt-set "p")) 3400)
-            addr      (or (.valueOf opt-set "a") "127.0.0.1")
-            threads   (or (parse-int (.valueOf opt-set "t")) 100)
-            protocol  (or (keyword (or (.valueOf opt-set "i") "binary")))]
-        (run db-path ephemeral port addr threads protocol))))
+(defn -main [& args]
+  (let [args-array  (into-array String args)
+        opt-parser (OptionParser. "f:ep:a:t:i:h")
+        opt-set    (.parse opt-parser args-array)]
+    (cond
+      (not-any? #(.has opt-set #^String %) ["f" "e" "p" "a" "t" "i" "h"])
+        (print-help)
+      (.has opt-set "h")
+        (print-help)
+      (not (empty? (.nonOptionArguments opt-set)))
+        (do
+          (printf "Unrecognized option '%s'. Use -h for help.\n"
+                  (first (.nonOptionArguments opt-set)))
+          (flush))
+      (not (or (.has opt-set "f") (.has opt-set "e")))
+        (println "You must specify either -e or -f <path>. Use -h for help.")
+      :else
+        (let [db-path   (.valueOf opt-set "f")
+              ephemeral (.has opt-set "e")
+              port      (or (parse-int (.valueOf opt-set "p")) 3400)
+              addr      (or (.valueOf opt-set "a") "127.0.0.1")
+              threads   (or (parse-int (.valueOf opt-set "t")) 100)
+              protocol  (or (keyword (or (.valueOf opt-set "i") "binary")))]
+          (run db-path ephemeral port addr threads protocol)))))

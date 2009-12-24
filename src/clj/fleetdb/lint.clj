@@ -134,9 +134,9 @@
 (defn lint-num-args [n q]
   (if (integer? n)
     (lint #(= n (dec (count %))) q
-          (str (first q) " query takes " n " arguments"))
+          (str (first q) " takes " n " arguments"))
     (lint #(n (dec (count %))) q
-          (str (first q) " query takes "
+          (str (first q) " takes "
                (first n) " or " (second n) " arguments"))))
 
 (defn- lint-insert [q]
