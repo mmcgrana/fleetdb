@@ -60,7 +60,7 @@
     (fn [#^PushbackReader in eof-val] (read in false eof-val))
     (fn [#^PrintWriter out [resp-code resp-val :as resp]]
       (if (#{0 1} resp-code)
-        (.print out (prn-str resp))
+        (.print out (prn-str resp-val))
         (.print out resp-val))
       (.println out)
       (.flush out))))
