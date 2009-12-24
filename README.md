@@ -7,7 +7,7 @@ Tutorial
 
 To get started, download the FleetDB standalone jar file and boot a server:
 
-    $ curl -o fleetdb-standalone.jar http://cloud.github.com/mmcgrana/fleetdb/fleetdb-standalone.jar
+    $ curl -o fleetdb-standalone.jar http://cloud.github.com/downloads/mmcgrana/fleetdb/fleetdb-standalone.jar
     $ java -cp fleetdb-standalone.jar fleetdb.server -i text -f "/tmp/test.fdb"
 
 Since we specified the `text` protocol, you can use `telnet` to interact with the server.
