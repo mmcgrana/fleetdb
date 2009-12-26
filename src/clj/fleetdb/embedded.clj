@@ -2,7 +2,7 @@
   (:use [fleetdb.util :only (def- ? spawn)]
         [clojure.contrib.seq-utils :only (partition-all)])
   (:require (fleetdb [core :as core] [fair-lock :as fair-lock]
-                     [io :as io] [file :as file]))
+                     [io :as io] [file :as file] [lint :as lint]))
   (:import  (java.util ArrayList)))
 
 (def- write-query-type?
@@ -95,16 +95,17 @@
             (alter-meta! dba assoc  :write-dos dos))))
       true)))
 
-(defn query [dba [query-type :as q]]
+(defn query [dba q]
   (assert (dba? dba))
-  (if (write-query-type? query-type)
+  (lint/lint-query q)
+  (if (write-query-type? (first q))
     (fair-lock/fair-locking (:write-lock (meta dba))
       (let [old-db          @dba
-            [new-db result] (core/query old-db q)]
+            [new-db result] (core/query* old-db q)]
         (when-let [write-dos (:write-dos (meta dba))]
           (io/dos-serialize write-dos q)
           (when-let [#^ArrayList write-buf (:write-buf (meta dba))]
             (.add write-buf q)))
         (assert (compare-and-set! dba old-db new-db))
         result))
-    (core/query @dba q)))
+    (core/query* @dba q)))

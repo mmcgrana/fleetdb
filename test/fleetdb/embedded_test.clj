@@ -43,3 +43,8 @@
         (assert-that (< post-compact-size pre-compact-size)))))
   (with-dba [dba-1 (embedded/load-persistent log-path)]
     (assert= 52 (embedded/query dba-1 [:count :elems]))))
+
+(deftest "catches linting errors"
+  (with-dba [dba (embedded/init-ephemeral)]
+    (assert-throws #"Malformed query: query not a vector ':foo'"
+      (embedded/query dba :foo))))
