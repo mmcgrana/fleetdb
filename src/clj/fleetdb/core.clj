@@ -1,5 +1,5 @@
 (ns fleetdb.core
-  (:import (clojure.lang Numbers Sorted IDeref)
+  (:import (clojure.lang Sorted RT)
            (fleetdb Compare))
   (:require (clojure.contrib [core :as core])
             (fleetdb [lint :as lint]))
@@ -395,7 +395,7 @@
           nattrs (count nispec)]
       (cond!
         (= nattrs 1) (first attrs)
-        (> nattrs 1) #(vec (map % attrs))))))
+        (> nattrs 1) #(vec-map % attrs)))))
 
 (defn- index-insert [index on-fn record]
   (update index (on-fn record)
@@ -462,7 +462,7 @@
   (raise "Invalid query type: " query-type))
 
 (defmethod query* :select [db [_ coll opts]]
-  (find-records db coll opts))
+  (vec (find-records db coll opts)))
 
 (defmethod query* :get [db [_ coll id-s]]
   (if-let [rmap (get-in db [coll :rmap])]
@@ -505,7 +505,7 @@
     (if (= :update query-type) e4 e3)))
 
 (defmethod query* :list-collections [db _]
-  (map first
+  (vec-map first
     (filter
       (fn [[coll {rmap :rmap imap :imap}]]
         (or (not (empty? rmap)) (not (empty? imap))))
@@ -524,10 +524,10 @@
     [(core/dissoc-in db [coll :imap ispec]) 1]))
 
 (defmethod query* :list-indexes [db [_ coll]]
-  (keys (get-in db [coll :imap])))
+  (vec (keys (get-in db [coll :imap]))))
 
 (defmethod query* :multi-read [db [_ queries]]
-  (vec (map #(query* db %) queries)))
+  (vec-map #(query* db %) queries))
 
 (defmethod query* :multi-write [db [_ queries]]
   (reduce

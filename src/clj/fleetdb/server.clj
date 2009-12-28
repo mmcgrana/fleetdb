@@ -11,7 +11,7 @@
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
-(defn- embedded-query [dba q]
+(defn- server-query [dba q]
   (let [[q-type q-opt] q]
     (condp = q-type
       :ping     "pong"
@@ -19,13 +19,9 @@
       :snapshot (embedded/snapshot dba q-opt)
       nil)))
 
-(defn- core-query [dba q]
-  (let [result (embedded/query dba q)]
-    (if (sequential? result) (vec result) result)))
-
 (defn- process-query [dba q]
-  (or (embedded-query dba q)
-      (core-query dba q)))
+  (or (server-query dba q)
+      (embedded/query dba q)))
 
 (defn generic-handler [init-out init-in read-query write-response]
   (fn [dba #^Socket socket]

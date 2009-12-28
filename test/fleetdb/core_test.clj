@@ -24,7 +24,7 @@
 (def- db2 (db-with :elems records [:lt [:num :tp]]))
 
 (deftest "select: no coll"
-  (assert-nil (core/query db1 [:select :foos])))
+  (assert= [] (core/query db1 [:select :foos])))
 
 (deftest "select: full coll"
   (assert-set= records (core/query db1 [:select :elems])))
@@ -344,10 +344,10 @@
     (assert= r2  1)
     (assert= r2d 0)
     (assert= [:name] (core/query db1-1 [:list-indexes :elems]))
-    (assert-nil (core/query db1-2 [:list-indexes :elems]))))
+    (assert= [] (core/query db1-2 [:list-indexes :elems]))))
 
 (deftest "list-indexes: none"
-  (assert-nil (core/query db1 [:list-indexes :foos])))
+  (assert= [] (core/query db1 [:list-indexes :foos])))
 
 (deftest "list-indexes: some"
   (let [[db1-1 _] (core/query db1   [:create-index :elems :name])

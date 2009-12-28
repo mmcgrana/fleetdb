@@ -82,7 +82,7 @@
   (dorun (map f coll)))
 
 (defn vec-map [f coll]
-  (into [] (map f coll)))
+  (vec (map f coll)))
 
 (defn high [comp coll]
   (if (seq coll)
