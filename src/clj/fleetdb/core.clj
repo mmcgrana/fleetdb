@@ -464,12 +464,6 @@
 (defmethod query* :select [db [_ coll opts]]
   (vec (find-records db coll opts)))
 
-(defmethod query* :get [db [_ coll id-s]]
-  (if-let [rmap (get-in db [coll :rmap])]
-    (if (vector? id-s)
-      (compact (map #(rmap %) id-s))
-      (rmap id-s))))
-
 (defmethod query* :count [db [_ coll opts]]
   (count (find-records db coll opts)))
 

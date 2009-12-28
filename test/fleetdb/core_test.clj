@@ -228,24 +228,15 @@
 (deftest "count: qualified"
   (assert= 3 (core/query db1 [:count :elems {:limit 3}])))
 
-(deftest "get: no coll"
-  (assert-nil (core/query db1 [:get :foos 7])))
-
-(deftest "get: present"
-  (assert-set= [r1 r3] (core/query db1 [:get :elems [1 3]])))
-
-(deftest "get: not present"
-  (assert-nil (core/query db1 [:get :elems 100])))
-
 (deftest "insert: one"
   (let [[new-db1 c] (core/query db1 [:insert :elems {:id 7}])]
     (assert= 1 c)
-    (assert= {:id 7} (core/query new-db1 [:get :elems 7]))))
+    (assert= [{:id 7}] (core/query new-db1 [:select :elems {:where [:= :id 7]}]))))
 
 (deftest "insert: multiple"
   (let [[new-db1 c] (core/query db1 [:insert :elems [{:id 7} {:id 8}]])]
     (assert= 2 c)
-    (assert= {:id 7} (core/query new-db1 [:get :elems 7]))))
+    (assert= [{:id 7}] (core/query new-db1 [:select :elems {:where [:= :id 7]}]))))
 
 (deftest "insert: no id"
   (assert-throws #"Record does not have an :id"
@@ -261,7 +252,7 @@
 
 (deftest "insert: new coll"
   (let [[new-db1 c] (core/query db1 [:insert :foos {:id 7}])]
-    (assert= {:id 7} (core/query new-db1 [:get :foos 7]))))
+    (assert= [{:id 7}] (core/query new-db1 [:select :foos {:where [:= :id 7]}]))))
 
 (deftest "update"
   (let [[db1-1 c] (core/query db1
@@ -297,8 +288,8 @@
                            [:delete :elems {:where [:= :id 6]}]]])]
     (assert= 2 i-result)
     (assert= 1 d-result)
-    (assert= elem (core/query new-db1 [:get :elems (:id elem)]))
-    (assert-not   (core/query new-db1 [:get :elems 6]))))
+    (assert= [elem] (core/query new-db1 [:select :elems {:where [:= :id (:id elem)]}]))
+    (assert= []     (core/query new-db1 [:select :elems {:where [:= :id 6]}]))))
 
 (deftest "multi-write: some reads"
    (let [elem {:id 7 :lt "g"}
@@ -308,7 +299,7 @@
                             [:insert :elems elem]]])]
      (assert= 6 c-result)
      (assert= 1 i-result)
-     (assert= elem (core/query new-db1 [:get :elems (:id elem)]))))
+     (assert= [elem] (core/query new-db1 [:select :elems {:where [:= :id (:id elem)]}]))))
 
 (deftest "checked-write: fail"
   (let [[new-db1 [pass actual]]
@@ -325,7 +316,7 @@
                                            [:insert :elems elem]])]
      (assert-that pass)
      (assert= result 1)
-     (assert= elem (core/query new-db1 [:get :elems 8]))))
+     (assert= [elem] (core/query new-db1 [:select :elems {:where [:= :id 8]}]))))
 
 (deftest "list-collections: no collections"
   (assert= [] (core/query (core/init) [:list-collections])))

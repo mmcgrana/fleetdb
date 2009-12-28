@@ -9,7 +9,7 @@
      (fail ~message ~val)))
 
 (def- query-types
-  #{:insert :get :select :count :update :delete :explain :list-collections
+  #{:insert :select :count :update :delete :explain :list-collections
     :create-index :drop-index :list-indexes :multi-read :multi-write
     :checked-write})
 
@@ -229,7 +229,6 @@
     (fail "query not a vector" q)
     (condp = (first q)
       :insert           (lint-insert           q)
-      :get              (lint-get              q)
       :select           (lint-select           q)
       :count            (lint-count            q)
       :update           (lint-update           q)
@@ -245,7 +244,7 @@
       (fail "unrecognized query type" (first q)))))
 
 (defn- lint-read-query [q]
-  (lint #{:get :select :count :explain :list-collections :list-indexes :multi-read}
+  (lint #{:select :count :explain :list-collections :list-indexes :multi-read}
         (first q)
         "query not a read query")
   (lint-query q))
