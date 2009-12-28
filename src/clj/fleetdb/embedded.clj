@@ -90,9 +90,7 @@
             (alter-meta! dba assoc  :write-dos dos))))
       true)))
 
-(defn query [dba q]
-  (assert (dba? dba))
-  (lint/lint-query q)
+(defn query* [dba q]
   (if (core/write-query? q)
     (fair-lock/fair-locking (:write-lock (meta dba))
       (let [old-db          @dba
@@ -104,3 +102,8 @@
         (assert (compare-and-set! dba old-db new-db))
         result))
     (core/query* @dba q)))
+
+(defn query [dba q]
+  (rassert (dba? dba) "dba not recognized as a database")
+  (lint/lint-query q)
+  (query* dba q))
