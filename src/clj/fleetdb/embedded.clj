@@ -1,5 +1,5 @@
 (ns fleetdb.embedded
-  (:use [fleetdb.util :only (def- ? spawn)]
+  (:use [fleetdb.util :only (def- ? spawn rassert raise)]
         [clojure.contrib.seq-utils :only (partition-all)])
   (:require (fleetdb [core :as core] [fair-lock :as fair-lock]
                      [io :as io] [file :as file] [lint :as lint]))
@@ -61,19 +61,19 @@
   true)
 
 (defn fork [dba]
-  (assert (ephemeral? dba))
+  (rassert (ephemeral? dba) "cannot fork persistent databases")
   (init* @dba))
 
 (defn snapshot [dba snapshot-path]
-  (assert (ephemeral? dba))
+  (rassert (ephemeral? dba) "cannot snapshot persistent databases")
   (let [tmp-path  (file/tmp-path "/tmp" "snapshot")]
     (write-to @dba tmp-path)
     (file/mv tmp-path snapshot-path)
     true))
 
 (defn compact [dba]
-  (assert (persistent? dba))
-  (assert (not (compacting? dba)))
+  (rassert (persistent? dba) "cannot compact ephemeral database")
+  (rassert (not (compacting? dba)) "already compacting database")
   (fair-lock/fair-locking (:write-lock (meta dba))
     (let [tmp-path      (file/tmp-path "/tmp" "compact")
           db-comp-start @dba]
