@@ -46,8 +46,9 @@
   (.close dis))
 
 (defn dos-serialize [#^DataOutputStream dos obj]
-  (Serializer/serialize dos obj)
-  (.flush dos))
+  (let [bytes (serialize obj)]
+    (.write dos bytes)
+    (.flush dos)))
 
 (defn dis-deserialize [dis eof-val]
   (Serializer/deserialize dis eof-val))
@@ -59,8 +60,9 @@
         (cons elem (dis-deserialized-seq dis))))))
 
 (defn dos-bert-encode [#^DataOutputStream dos obj]
-  (Bert/encode dos obj)
-  (.flush dos))
+  (let [bytes (bert-encode obj)]
+    (.write dos bytes)
+    (.flush dos)))
 
 (defn dis-bert-decode [#^DataInputStream dis eof-val]
   (Bert/decode dis eof-val))
@@ -72,10 +74,9 @@
         (cons elem (dis-bert-decoded-seq dis))))))
 
 (defn dos-berp-encode [#^DataOutputStream dos obj]
-  (let [bytes (bert-encode obj)
-        len   (alength bytes)]
-    (.writeInt dos len)
-    (.write dos bytes 0 len)
+  (let [bytes (bert-encode obj)]
+    (.writeInt dos (alength bytes))
+    (.write dos bytes)
     (.flush dos)))
 
 (defn dis-berp-decode [#^DataInputStream dis eof-val]
