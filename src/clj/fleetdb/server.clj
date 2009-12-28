@@ -6,8 +6,8 @@
   (:import  (java.net ServerSocket Socket InetAddress)
             (java.io PushbackReader BufferedReader InputStreamReader
                      PrintWriter    BufferedWriter OutputStreamWriter
-                     DataInputStream  BufferedInputStream
-                     DataOutputStream BufferedOutputStream)
+                     DataInputStream  BufferedInputStream  InputStream
+                     DataOutputStream BufferedOutputStream OutputStream)
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
@@ -31,8 +31,8 @@
   (fn [dba #^Socket socket]
     (try
       (with-open [socket socket
-                  out    (init-out socket)
-                  in     (init-in  socket)]
+                  out    (init-out (.getOutputStream socket))
+                  in     (init-in  (.getInputStream socket))]
         (.setKeepAlive socket true)
         (loop []
           (if (try
@@ -55,8 +55,8 @@
 
 (def- text-handler
   (generic-handler
-    (fn [#^Socket socket] (PrintWriter. (BufferedWriter. (OutputStreamWriter. (.getOutputStream socket)))))
-    (fn [#^Socket socket] (PushbackReader. (BufferedReader. (InputStreamReader. (.getInputStream  socket)))))
+    (fn [#^OutputStream os] (PrintWriter. (BufferedWriter. (OutputStreamWriter. os))))
+    (fn [#^InputStream is] (PushbackReader. (BufferedReader. (InputStreamReader. is))))
     (fn [#^PushbackReader in eof-val] (read in false eof-val))
     (fn [#^PrintWriter out [resp-code resp-val :as resp]]
       (if (#{0 1} resp-code)
@@ -67,15 +67,15 @@
 
 (def- binary-handler
   (generic-handler
-    (fn [#^Socket socket] (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket))))
-    (fn [#^Socket socket] (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket))))
+    (fn [#^OutputStream os] (DataOutputStream. (BufferedOutputStream. os)))
+    (fn [#^InputStream is] (DataInputStream.  (BufferedInputStream. is)))
     (fn [#^DataInputStream in eof-val] (io/dis-deserialize in io/eof))
     (fn [#^DataOutputStream out resp]  (io/dos-serialize out resp))))
 
 (def- bert-handler
   (generic-handler
-    (fn [#^Socket socket] (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket))))
-    (fn [#^Socket socket] (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket))))
+    (fn [#^OutputStream os] (DataOutputStream. (BufferedOutputStream. os)))
+    (fn [#^InputStream is] (DataInputStream.  (BufferedInputStream.  is)))
     (fn [#^DataInputStream in eof-val] (io/dis-berp-decode in io/eof))
     (fn [#^DataOutputStream out resp]  (io/dos-berp-encode out resp))))
 
