@@ -445,6 +445,17 @@
 
 ;; Query implementations
 
+(def- write-query-types
+  #{:insert :update :delete
+    :create-index :drop-index
+    :multi-write :checked-write})
+
+(defn write-query? [q]
+  (contains? write-query-types (first q)))
+
+(defn read-query? [q]
+  (not (write-query? q)))
+
 (defmulti query* (fn [db q] (first q)))
 
 (defmethod query* :default [_ [query-type]]
@@ -521,8 +532,10 @@
 (defmethod query* :multi-write [db [_ queries]]
   (reduce
     (fn [[int-db int-results] q]
-      (let [[aug-db result] (query* int-db q)]
-        [aug-db (conj int-results result)]))
+      (if (read-query? q)
+        [int-db (conj int-results (query* int-db q))]
+        (let [[aug-db result] (query* int-db q)]
+          [aug-db (conj int-results result)])))
     [db []]
     queries))
 

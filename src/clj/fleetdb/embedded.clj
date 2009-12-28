@@ -5,11 +5,6 @@
                      [io :as io] [file :as file] [lint :as lint]))
   (:import  (java.util ArrayList)))
 
-(def- write-query-type?
-  #{:insert :update :delete
-    :create-index :drop-index
-    :multi-write :checked-write})
-
 (defn- dba? [dba]
   (? (:write-lock (meta dba))))
 
@@ -98,7 +93,7 @@
 (defn query [dba q]
   (assert (dba? dba))
   (lint/lint-query q)
-  (if (write-query-type? (first q))
+  (if (core/write-query? q)
     (fair-lock/fair-locking (:write-lock (meta dba))
       (let [old-db          @dba
             [new-db result] (core/query* old-db q)]

@@ -204,7 +204,7 @@
   (lint-num-args 1 q)
   (lint-coll (second q)))
 
-(declare lint-read-query lint-write-query)
+(declare lint-query lint-read-query lint-write-query)
 
 (defn- lint-multi-read [q]
   (lint-num-args 1 q)
@@ -216,7 +216,7 @@
   (lint-num-args 1 q)
   (let [writes (second q)]
     (lint vector? writes "write queries not given in a vector")
-    (domap lint-write-query writes)))
+    (domap lint-query writes)))
 
 (defn- lint-checked-write [q]
   (lint-num-args 3 q)

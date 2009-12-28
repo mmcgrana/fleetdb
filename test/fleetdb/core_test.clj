@@ -300,6 +300,16 @@
     (assert= elem (core/query new-db1 [:get :elems (:id elem)]))
     (assert-not   (core/query new-db1 [:get :elems 6]))))
 
+(deftest "multi-write: some reads"
+   (let [elem {:id 7 :lt "g"}
+         [new-db1 [c-result i-result]]
+           (core/query db1
+             [:multi-write [[:count :elems]
+                            [:insert :elems elem]]])]
+     (assert= 6 c-result)
+     (assert= 1 i-result)
+     (assert= elem (core/query new-db1 [:get :elems (:id elem)]))))
+
 (deftest "checked-write: fail"
   (let [[new-db1 [pass actual]]
           (core/query db1 [:checked-write [:count :elems] 7
