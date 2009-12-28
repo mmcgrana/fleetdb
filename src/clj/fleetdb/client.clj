@@ -11,20 +11,25 @@
 (def- write-fns
   {:binary io/dos-serialize   :bert io/dos-berp-encode})
 
-(defn connect [#^String host #^Integer port protocol]
-  (assert (#{:binary :bert} protocol))
-  (let [socket (Socket. host port)]
-    {:dis      (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))
-     :dos      (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))
-     :read-fn  (read-fns protocol)
-     :write-fn (write-fns protocol)
-     :socket   socket}))
+(defn connect [#^String host #^Integer port & [protocol]]
+  (let [protocol (or protocol :bert)]
+    (assert (#{:binary :bert} protocol))
+    (let [socket (Socket. host port)]
+      {:dis      (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))
+       :dos      (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))
+       :read-fn  (read-fns protocol)
+       :write-fn (write-fns protocol)
+       :socket   socket})))
 
 (defn query [client q]
   ((:write-fn client) (:dos client) q)
-  (let [result ((:read-fn client) (:dis client) io/eof)]
-    (assert (not= result io/eof))
-    result))
+  (let [resp ((:read-fn client) (:dis client) io/eof)]
+    (if (= resp io/eof)
+      (throw (Exception. "Server disconnected"))
+      (let [[status result] resp]
+        (if (= status 0)
+          result
+          (throw (Exception. (str result))))))))
 
 (defn close [client]
   (io/dis-close (:dis client))

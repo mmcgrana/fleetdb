@@ -91,21 +91,22 @@
                         (if loading
                           (embedded/load-persistent db-path)
                           (embedded/init-persistent db-path)))]
-    (println "FleetDB serving" (name protocol) "protocol on port" port)
+    (printf "FleetDB serving '%s' protocol on port %d\n" (name protocol) port)
+    (flush)
     (loop []
       (let [socket (doto (.accept server-socket))]
         (thread-pool/submit pool #(handler dba socket)))
       (recur))))
 
 (defn- print-help []
-  (println "FleetDB Server                                                                 ")
-  (println "-f <path>   Path to database log file                                          ")
-  (println "-e          Ephemeral: do not log changes to disk                              ")
-  (println "-p <port>   TCP port to listen on (default: 3400)                              ")
-  (println "-a <addr>   Local address to listen on (default: 127.0.0.1)                    ")
-  (println "-t <num>    Maximum number of worker threads (default: 100)                    ")
-  (println "-i <name>   Client/server protocol: one of {text,binary,bert} (default: binary)")
-  (println "-h          Print this help and exit.                                          "))
+  (println "FleetDB Server                                                               ")
+  (println "-f <path>   Path to database log file                                        ")
+  (println "-e          Ephemeral: do not log changes to disk                            ")
+  (println "-p <port>   TCP port to listen on (default: 3400)                            ")
+  (println "-a <addr>   Local address to listen on (default: 127.0.0.1)                  ")
+  (println "-t <num>    Maximum number of worker threads (default: 100)                  ")
+  (println "-i <name>   Client/server protocol: one of {text,binary,bert} (default: bert)")
+  (println "-h          Print this help and exit.                                        "))
 
 (defn- parse-int [s]
   (and s (Integer/decode s)))
@@ -132,5 +133,5 @@
               port      (or (parse-int (.valueOf opt-set "p")) 3400)
               addr      (or (.valueOf opt-set "a") "127.0.0.1")
               threads   (or (parse-int (.valueOf opt-set "t")) 100)
-              protocol  (or (keyword (or (.valueOf opt-set "i") "binary")))]
+              protocol  (or (keyword (or (.valueOf opt-set "i") "bert")))]
           (run db-path ephemeral port addr threads protocol)))))
