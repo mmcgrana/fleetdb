@@ -294,8 +294,8 @@ public class Bert {
   }
 
   private static BigInteger decodeBignum(DataInputStream dis, int size, byte sign) throws Exception {
-    byte[] bytes = new byte[size];
-    dis.read(bytes);
+    byte[] bytes = new byte[Math.max(size, 8)];
+    dis.read(bytes, 0, size);
     reverse(bytes);
     BigInteger abs = new BigInteger(bytes);
     return (sign == 1) ? abs.negate() : abs;
