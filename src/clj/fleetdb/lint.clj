@@ -1,4 +1,5 @@
 (ns fleetdb.lint
+  (:require (fleetdb [types :as types]))
   (:use (fleetdb [util :only (def- defmacro- domap raise boolean?)])))
 
 (defn- fail [message val]
@@ -246,13 +247,13 @@
       (fail "unrecognized query type" (first q)))))
 
 (defn- lint-read-query [q]
-  (lint #{"select" "count" "explain" "list-collections" "list-indexes" "multi-read"}
+  (lint types/read-queries
         (first q)
         "query not a read query")
   (lint-query q))
 
 (defn- lint-write-query [q]
-  (lint #{"insert" "update" "delete" "create-index" "drop-index" "multi-write" "checked-write"}
+  (lint types/write-queries
         (first q)
         "query not a write query")
   (lint-query q))
