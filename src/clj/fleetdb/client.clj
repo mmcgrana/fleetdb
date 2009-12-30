@@ -1,35 +1,68 @@
 (ns fleetdb.client
   (:use (fleetdb [util :only (def-)]))
-  (:require (fleetdb [io :as io]))
+  (:require (fleetdb [io :as io])
+            (clojure.contrib [str-utils :as str-utils]))
   (:import (java.net Socket)
            (java.io DataInputStream  BufferedInputStream
                     DataOutputStream BufferedOutputStream)))
 
-(def- read-fns
-  {:binary io/dis-deserialize :bert io/dis-berp-decode})
+(def- binary-handler
+  [(fn [out q]
+     (io/dos-serialize out q))
+   (fn [in]
+     (let [resp (io/dis-deserialize in io/eof)]
+       (if (= resp io/eof)
+         (throw (Exception. "Server disconnected"))
+         (let [[status val] resp]
+           (if (zero? status)
+             val
+             (throw (Exception. #^String val)))))))])
 
-(def- write-fns
-  {:binary io/dos-serialize   :bert io/dos-berp-encode})
+(def- bert-handler
+  [(fn [out q]
+     (io/dos-berp-encode out q))
+   (fn [in]
+     (let [resp (io/dis-berp-decode in io/eof)]
+       (if (= resp io/eof)
+         (throw (Exception. "Server disconnected"))
+         (let [[status val] resp]
+           (if (zero? status)
+             val
+             (throw (Exception. #^String val)))))))])
+
+(def- bert-rpc-handler
+  [(fn [out q]
+     (io/dos-berp-encode out [:call :server :query [q]]))
+   (fn [in]
+     (let [resp (io/dis-berp-decode in io/eof)]
+       (if (= resp io/eof)
+         (throw (Exception. "Server disconnected"))
+         (let [[status vals] resp]
+           (if (= status :reply)
+             vals
+             (let [[type code class detail stacktrace] vals
+                   msg (if (= type :user)
+                         (str detail)
+                         (str detail (str-utils/str-join "\n" stacktrace)))]
+               (throw (Exception. msg))))))))])
+
+(def- protocol-handlers
+  {:binary binary-handler :bert bert-handler :bert-rpc bert-rpc-handler})
 
 (defn connect [#^String host #^Integer port & [protocol]]
-  (let [protocol (or protocol :bert)]
-    (assert (#{:binary :bert} protocol))
-    (let [socket (Socket. host port)]
-      {:dis      (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))
-       :dos      (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))
-       :read-fn  (read-fns protocol)
-       :write-fn (write-fns protocol)
+  (let [protocol (or protocol :bert-rpc)]
+    (assert (#{:binary :bert :bert-rpc} protocol))
+    (let [socket             (Socket. host port)
+          [write-fn read-fn] (protocol-handlers protocol)]
+      {:dos      (DataOutputStream. (BufferedOutputStream. (.getOutputStream socket)))
+       :dis      (DataInputStream.  (BufferedInputStream.  (.getInputStream  socket)))
+       :write-fn write-fn
+       :read-fn  read-fn
        :socket   socket})))
 
 (defn query [client q]
   ((:write-fn client) (:dos client) q)
-  (let [resp ((:read-fn client) (:dis client) io/eof)]
-    (if (= resp io/eof)
-      (throw (Exception. "Server disconnected"))
-      (let [[status result] resp]
-        (if (= status 0)
-          result
-          (throw (Exception. (str result))))))))
+  ((:read-fn client) (:dis client)))
 
 (defn close [client]
   (io/dis-close (:dis client))

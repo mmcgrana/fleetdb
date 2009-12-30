@@ -14,7 +14,6 @@ import clojure.lang.IPersistentVector;
 import clojure.lang.LazilyPersistentVector;
 import clojure.lang.IPersistentList;
 import clojure.lang.PersistentList;
-import clojure.lang.LazySeq;
 import clojure.lang.Seqable;
 import clojure.lang.ArraySeq;
 import clojure.lang.Symbol;
@@ -79,7 +78,7 @@ public class Bert {
       encodeMap(dos, (IPersistentMap) obj);
     } else if (obj instanceof IPersistentVector) {
       encodeVector(dos, (IPersistentVector) obj);
-    } else if ((obj instanceof IPersistentList) || (obj instanceof LazySeq)) {
+    } else if ((obj instanceof IPersistentList) || (obj instanceof ISeq)) {
       encodeSeq(dos, ((Seqable) obj).seq(), false);
     } else {
       throw new Exception("Cannot encode " + obj);

@@ -11,7 +11,7 @@ import clojure.lang.IMapEntry;
 import clojure.lang.IPersistentVector;
 import clojure.lang.LazilyPersistentVector;
 import clojure.lang.IPersistentList;
-import clojure.lang.LazySeq;
+import clojure.lang.ISeq;
 import clojure.lang.Seqable;
 import clojure.lang.ArraySeq;
 import clojure.lang.Keyword;
@@ -29,6 +29,7 @@ public class Serializer {
   private static final byte DOUBLE_TYPE =      8;
   private static final byte BOOLEAN_TYPE =     9;
   private static final byte NIL_TYPE =         10;
+  private static final byte BINARY_TYPE =      11;
 
   public static void serialize(DataOutputStream dos, Object obj) throws Exception {
     if (obj instanceof Keyword) {
@@ -95,7 +96,7 @@ public class Serializer {
       }
 
     } else if ((obj instanceof IPersistentList) ||
-               (obj instanceof LazySeq)) {
+               (obj instanceof ISeq)) {
       ISeq seq = ((Seqable) obj).seq();
       int len = seq.count();
 		  dos.writeByte(LIST_TYPE);

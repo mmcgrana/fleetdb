@@ -46,7 +46,7 @@
   (.close dis))
 
 (defn dos-serialize [#^DataOutputStream dos obj]
-  (let [bytes (serialize obj)]
+  (let [#^"[B" bytes (serialize obj)]
     (.write dos bytes)
     (.flush dos)))
 
@@ -60,7 +60,7 @@
         (cons elem (dis-deserialized-seq dis))))))
 
 (defn dos-bert-encode [#^DataOutputStream dos obj]
-  (let [bytes (bert-encode obj)]
+  (let [#^"[B" bytes (bert-encode obj)]
     (.write dos bytes)
     (.flush dos)))
 
@@ -74,7 +74,7 @@
         (cons elem (dis-bert-decoded-seq dis))))))
 
 (defn dos-berp-encode [#^DataOutputStream dos obj]
-  (let [bytes (bert-encode obj)]
+  (let [#^"[B" bytes (bert-encode obj)]
     (.writeInt dos (alength bytes))
     (.write dos bytes)
     (.flush dos)))

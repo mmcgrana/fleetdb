@@ -2,7 +2,8 @@
   (:use     (fleetdb util))
   (:require (fleetdb [embedded :as embedded] [io :as io] [file :as file]
                      [thread-pool :as thread-pool])
-            (clj-stacktrace [repl :as stacktrace]))
+            (clj-stacktrace [repl :as stacktrace])
+            (clojure.contrib [str-utils :as str-utils]))
   (:import  (java.net ServerSocket Socket InetAddress)
             (java.io PushbackReader BufferedReader InputStreamReader
                      PrintWriter    BufferedWriter OutputStreamWriter
@@ -23,7 +24,7 @@
   (or (server-query dba q)
       (embedded/query dba q)))
 
-(defn generic-handler [init-out init-in read-query write-response]
+(defn generic-handler [init-out init-in read-query write-response write-error]
   (fn [dba #^Socket socket]
     (try
       (with-open [socket socket
@@ -33,16 +34,13 @@
         (loop []
           (if (try
                 (let [query (read-query in io/eof)]
-                  (if (identical? query io/eof)
+                  (if (= query io/eof)
                     false
                     (let [result (process-query dba query)]
-                      (write-response out [0 result])
+                      (write-response out result)
                       true)))
                 (catch Exception e
-                  (write-response out
-                    (if (raised? e)
-                      [1 (str e)]
-                      [2 (stacktrace/pst-str e)]))
+                  (write-error out e)
                   true))
               (recur))))
       (catch Exception e
@@ -51,32 +49,74 @@
 
 (def- text-handler
   (generic-handler
-    (fn [#^OutputStream os] (PrintWriter. (BufferedWriter. (OutputStreamWriter. os))))
-    (fn [#^InputStream is] (PushbackReader. (BufferedReader. (InputStreamReader. is))))
-    (fn [#^PushbackReader in eof-val] (read in false eof-val))
-    (fn [#^PrintWriter out [resp-code resp-val :as resp]]
-      (if (#{0 1} resp-code)
-        (.print out (prn-str resp-val))
-        (.print out resp-val))
+    (fn [#^OutputStream os]
+      (PrintWriter. (BufferedWriter. (OutputStreamWriter. os))))
+    (fn [#^InputStream is]
+      (PushbackReader. (BufferedReader. (InputStreamReader. is))))
+    (fn [#^PushbackReader in eof-val]
+      (read in false eof-val))
+    (fn [#^PrintWriter out val]
+      (.println out (pr-str val))
       (.println out)
-      (.flush out))))
+      (.flush out))
+    (fn [#^PrintWriter out e]
+      (let [msg (if (raised? e) (str e) (stacktrace/pst-str e))]
+        (.println out msg)
+        (.println out)
+        (.flush out)))))
 
 (def- binary-handler
   (generic-handler
-    (fn [#^OutputStream os] (DataOutputStream. (BufferedOutputStream. os)))
-    (fn [#^InputStream is] (DataInputStream.  (BufferedInputStream. is)))
-    (fn [#^DataInputStream in eof-val] (io/dis-deserialize in io/eof))
-    (fn [#^DataOutputStream out resp]  (io/dos-serialize out resp))))
+    (fn [#^OutputStream os]
+      (DataOutputStream. (BufferedOutputStream. os)))
+    (fn [#^InputStream is]
+      (DataInputStream.  (BufferedInputStream. is)))
+    (fn [#^DataInputStream in eof-val]
+      (io/dis-deserialize in io/eof))
+    (fn [#^DataOutputStream out val]
+      (io/dos-serialize out [0 val]))
+    (fn [#^DataOutputStream out e]
+      (let [msg (if (raised? e) (str e) (stacktrace/pst-str e))]
+        (io/dos-serialize out [1 msg])))))
 
 (def- bert-handler
   (generic-handler
-    (fn [#^OutputStream os] (DataOutputStream. (BufferedOutputStream. os)))
-    (fn [#^InputStream is] (DataInputStream.  (BufferedInputStream.  is)))
-    (fn [#^DataInputStream in eof-val] (io/dis-berp-decode in io/eof))
-    (fn [#^DataOutputStream out resp]  (io/dos-berp-encode out resp))))
+    (fn [#^OutputStream os]
+      (DataOutputStream. (BufferedOutputStream. os)))
+    (fn [#^InputStream is]
+      (DataInputStream.  (BufferedInputStream.  is)))
+    (fn [#^DataInputStream in eof-val]
+      (io/dis-berp-decode in io/eof))
+    (fn [#^DataOutputStream out val]
+      (io/dos-berp-encode out [0 val]))
+    (fn [#^DataOutputStream out e]
+      (let [msg (if (raised? e) (str e) (stacktrace/pst-str e))]
+        (io/dos-berp-encode out [1 msg])))))
+
+(def- bert-rpc-handler
+  (generic-handler
+    (fn [os]
+      (DataOutputStream. (BufferedOutputStream. os)))
+    (fn [is]
+      (DataInputStream. (BufferedInputStream. is)))
+    (fn [in eof-val]
+      (let [d (io/dis-berp-decode in io/eof)]
+        (if (= d io/eof)
+          d
+          (let [[call server query [q]] d]
+            q))))
+    (fn [out val]
+      (io/dos-berp-encode out [:reply val]))
+    (fn [out e]
+      (let [bert (if (raised? e)
+                   [:error [:user   0 "Exception"          (str e) (list)]]
+                   [:error [:server 0 (.getName (class e)) (str e)
+                     (next (str-utils/re-split #"\n" (stacktrace/pst-str e)))]])]
+        (io/dos-berp-encode out bert)))))
 
 (def- protocol-handlers
-  {:text text-handler :binary binary-handler :bert bert-handler})
+  {:text text-handler :binary binary-handler
+   :bert bert-handler :bert-rpc bert-rpc-handler})
 
 (defn run [db-path ephemeral port addr threads protocol]
   (let [inet          (InetAddress/getByName addr)
@@ -105,7 +145,7 @@
   (println "-p <port>   TCP port to listen on (default: 3400)                            ")
   (println "-a <addr>   Local address to listen on (default: 127.0.0.1)                  ")
   (println "-t <num>    Maximum number of worker threads (default: 100)                  ")
-  (println "-i <name>   Client/server protocol: one of {text,binary,bert} (default: bert)")
+  (println "-i <name>   Client/server protocol: one of {text,binary,bert,bert-rpc} (default: bert)")
   (println "-h          Print this help and exit.                                        "))
 
 (defn- parse-int [s]
