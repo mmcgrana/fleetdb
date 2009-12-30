@@ -1,8 +1,8 @@
 (ns fleetdb.embedded
   (:use [fleetdb.util :only (def- ? spawn rassert raise)]
         [clojure.contrib.seq-utils :only (partition-all)])
-  (:require (fleetdb [core :as core] [fair-lock :as fair-lock]
-                     [io :as io] [file :as file] [lint :as lint]))
+  (:require (fleetdb [types :as types] [lint :as lint] [core :as core]
+                     [fair-lock :as fair-lock] [file :as file] [io :as io]))
   (:import  (java.util ArrayList)))
 
 (defn- dba? [dba]
@@ -91,7 +91,7 @@
       true)))
 
 (defn query* [dba q]
-  (if (core/write-query? q)
+  (if (types/write-queries (first q))
     (fair-lock/fair-locking (:write-lock (meta dba))
       (let [old-db          @dba
             [new-db result] (core/query* old-db q)]

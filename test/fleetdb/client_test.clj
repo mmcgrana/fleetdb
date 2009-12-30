@@ -11,7 +11,7 @@
          (client/close ~name)))))
 
 (defmacro with-test-client [name & body]
-  `(with-client [~name "127.0.0.1" 3400] ~@body))
+  `(with-client [~name "localhost" 3400] ~@body))
 
 (deftest "ping"
   (with-test-client client

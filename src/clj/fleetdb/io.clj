@@ -1,14 +1,12 @@
 (ns fleetdb.io
-  (:import (fleetdb Serializer Bert Json)
+  (:import (fleetdb Serializer Json)
            (org.codehaus.jackson JsonFactory JsonParser JsonGenerator)
            (java.io ByteArrayOutputStream ByteArrayInputStream
                     FileOutputStream BufferedOutputStream DataOutputStream
                     FileInputStream  BufferedInputStream  DataInputStream
-                    FileWriter       BufferedWriter
-                    FileReader       BufferedReader
-                    StringWriter     StringReader
-                    Writer           Reader
-                    EOFException))
+                    FileWriter StringWriter OutputStreamWriter BufferedWriter
+                    FileReader StringReader InputStreamReader  BufferedReader
+                    InputStream OutputStream Writer Reader EOFException))
   (:require (fleetdb [file :as file]))
   (:use (fleetdb [util :only (def-)])))
 
@@ -24,17 +22,6 @@
   (let [bais  (ByteArrayInputStream. bytes)
         dis   (DataInputStream. bais)]
     (Serializer/deserialize dis eof-val)))
-
-(defn bert-encode [obj]
-  (let [baos (ByteArrayOutputStream.)
-        dos  (DataOutputStream. baos)]
-    (Bert/encode dos obj)
-    (.toByteArray baos)))
-
-(defn bert-decode [bytes eof-val]
-  (let [bais  (ByteArrayInputStream. bytes)
-        dis   (DataInputStream. bais)]
-    (Bert/decode dis eof-val)))
 
 (defn dos-init [#^String dos-path]
   (DataOutputStream. (BufferedOutputStream.
@@ -64,41 +51,13 @@
       (if-not (identical? elem eof)
         (cons elem (dis-deserialized-seq dis))))))
 
-(defn dos-bert-encode [#^DataOutputStream dos obj]
-  (let [#^"[B" bytes (bert-encode obj)]
-    (.write dos bytes)
-    (.flush dos)))
-
-(defn dis-bert-decode [#^DataInputStream dis eof-val]
-  (Bert/decode dis eof-val))
-
-(defn dis-bert-decoded-seq [dis]
-  (lazy-seq
-    (let [elem (dis-bert-decode dis eof)]
-      (if-not (identical? elem eof)
-        (cons elem (dis-bert-decoded-seq dis))))))
-
-(defn dos-berp-encode [#^DataOutputStream dos obj]
-  (let [#^"[B" bytes (bert-encode obj)]
-    (.writeInt dos (alength bytes))
-    (.write dos bytes)
-    (.flush dos)))
-
-(defn dis-berp-decode [#^DataInputStream dis eof-val]
-  (try
-    (let [len   (.readInt dis)
-          bytes (byte-array len)]
-      (.read dis bytes)
-      (bert-decode bytes eof-val))
-    (catch EOFException e
-      eof-val)))
 
 (def- #^JsonFactory factory (JsonFactory.))
 
 (defn writer->generator [#^Writer writer]
   (.createJsonGenerator factory writer))
 
-(defn os->generator [#^OutputStream]
+(defn os->generator [#^OutputStream os]
   (writer->generator (OutputStreamWriter. (BufferedOutputStream. os))))
 
 (defn path->generator [#^String path]
@@ -110,7 +69,7 @@
 
 (defn generate-string [obj]
   (let [sw (StringWriter.)]
-    (generate (writer-generator sw) obj)
+    (generate (writer->generator sw) obj)
     (.toString sw)))
 
 (defn generator-close [#^JsonGenerator generator]
@@ -123,13 +82,13 @@
   (reader->parser (InputStreamReader. (BufferedInputStream. is))))
 
 (defn path->parser [#^String path]
-  (reader-parser (BufferedReader. (FileReader. path))))
+  (reader->parser (BufferedReader. (FileReader. path))))
 
 (defn parse [parser eof]
   (Json/parse parser true eof))
 
 (defn parse-string [string eof]
-  (parse (reader-parser (StringReader. string)) eof))
+  (parse (reader->parser (StringReader. string)) eof))
 
 (defn parsed-seq [parser]
   (lazy-seq

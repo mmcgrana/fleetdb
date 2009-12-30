@@ -202,7 +202,7 @@
         right-val-t (if (= (count right-val) 1) (first right-val) right-val)]
     (-> (if (= left-val-t right-val-t)
           ["index-lookup" [coll ispec left-val-t]]
-          ["index-seq"    [coll ispec sdir left-val-t left-inc right-val-t right-inc]])
+          ["index-range"  [coll ispec sdir left-val-t left-inc right-val-t right-inc]])
       (filter-plan where-left)
       (sort-plan   order-left))))
 
@@ -270,7 +270,7 @@
       (let [subpreds (map #(where-pred %) wrest)
             conj-op-fn  (conj-op-fns op)]
         (fn [record]
-          (conj-op-fn (map #(record %) subpreds))))
+          (conj-op-fn (map #(% record) subpreds))))
     (sing-op-fns op)
       (let [[attr aval] wrest
             sing-op-fn  (sing-op-fns op)]
@@ -307,7 +307,7 @@
   (condv only
     vector?
       (map (fn [r] (vec-map #(r %) only)) (exec-plan db source))
-    keyword?
+    string?
       (map (fn [r] (r only)) (exec-plan db source))))
 
 (defmethod exec-plan "union" [db [_ order sources]]
@@ -343,7 +343,7 @@
 (defmethod exec-plan "index-lookup" [db [_ [coll ispec val]]]
   (indexed-flatten1 (get-in db [coll :imap ispec val])))
 
-(defmethod exec-plan "index-seq"
+(defmethod exec-plan "index-range"
   [db [_ [coll ispec sdir left-val left-inc right-val right-inc]]]
     (let [#^Sorted index (get-in db [coll :imap ispec])
           indexeds
@@ -394,8 +394,8 @@
     (let [attrs  (map first nispec)
           nattrs (count nispec)]
       (cond!
-        (= nattrs 1) (first attrs)
-        (> nattrs 1) #(vec-map % attrs)))))
+        (= nattrs 1) (let [attr (first attrs)] #(get % attr))
+        (> nattrs 1) #(vec-map (fn [attr] (get % attr)) attrs)))))
 
 (defn- index-insert [index on-fn record]
   (update index (on-fn record)
@@ -454,7 +454,7 @@
   (count (find-records db coll opts)))
 
 (defn- db-apply [db coll records apply-fn]
-  (let [old-coll (coll db)
+  (let [old-coll (get db coll)
         old-rmap (:rmap old-coll)
         old-imap (:imap old-coll)
         [new-rmap new-imap] (reduce apply-fn [old-rmap old-imap] records)]
@@ -512,7 +512,7 @@
 (defmethod query* "multi-write" [db [_ queries]]
   (reduce
     (fn [[int-db int-results] q]
-      (if (types/read-queries q)
+      (if (types/read-queries (first q))
         [int-db (conj int-results (query* int-db q))]
         (let [[aug-db result] (query* int-db q)]
           [aug-db (conj int-results result)])))

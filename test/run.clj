@@ -5,5 +5,5 @@
   'fleetdb.io-test
   'fleetdb.core-test
   'fleetdb.embedded-test
-  'fleetdb.client-test
+  ;'fleetdb.client-test
 )
