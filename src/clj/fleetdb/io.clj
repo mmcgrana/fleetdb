@@ -1,9 +1,8 @@
 (ns fleetdb.io
   (:import (fleetdb Serializer Json)
            (org.codehaus.jackson JsonFactory JsonParser JsonGenerator)
-           (java.io ByteArrayOutputStream ByteArrayInputStream
-                    FileOutputStream BufferedOutputStream DataOutputStream
-                    FileInputStream  BufferedInputStream  DataInputStream
+           (java.io FileOutputStream BufferedOutputStream
+                    FileInputStream  BufferedInputStream
                     FileWriter StringWriter OutputStreamWriter BufferedWriter
                     FileReader StringReader InputStreamReader  BufferedReader
                     InputStream OutputStream Writer Reader EOFException))
@@ -11,46 +10,6 @@
   (:use (fleetdb [util :only (def-)])))
 
 (def eof (Object.))
-
-(defn serialize [obj]
-  (let [baos (ByteArrayOutputStream.)
-        dos  (DataOutputStream. baos)]
-    (Serializer/serialize dos obj)
-    (.toByteArray baos)))
-
-(defn deserialize [bytes eof-val]
-  (let [bais  (ByteArrayInputStream. bytes)
-        dis   (DataInputStream. bais)]
-    (Serializer/deserialize dis eof-val)))
-
-(defn dos-init [#^String dos-path]
-  (DataOutputStream. (BufferedOutputStream.
-    (FileOutputStream. dos-path #^Boolean (file/exist? dos-path)))))
-
-(defn dos-close [#^DataOutputStream dos]
-  (.close dos))
-
-(defn dis-init [#^String dis-path]
-  (assert (file/exist? dis-path))
-  (DataInputStream. (BufferedInputStream. (FileInputStream. dis-path))))
-
-(defn dis-close [#^DataInputStream dis]
-  (.close dis))
-
-(defn dos-serialize [#^DataOutputStream dos obj]
-  (let [#^"[B" bytes (serialize obj)]
-    (.write dos bytes)
-    (.flush dos)))
-
-(defn dis-deserialize [dis eof-val]
-  (Serializer/deserialize dis eof-val))
-
-(defn dis-deserialized-seq [dis]
-  (lazy-seq
-    (let [elem (dis-deserialize dis eof)]
-      (if-not (identical? elem eof)
-        (cons elem (dis-deserialized-seq dis))))))
-
 
 (def- #^JsonFactory factory (JsonFactory.))
 
@@ -61,7 +20,9 @@
   (writer->generator (OutputStreamWriter. (BufferedOutputStream. os))))
 
 (defn path->generator [#^String path]
-  (writer->generator (BufferedWriter. (FileWriter. path))))
+  (writer->generator
+    (BufferedWriter. (OutputStreamWriter.
+      (FileOutputStream. path #^Boolean (file/exist? path))))))
 
 (defn generate [generator obj]
   (Json/generate generator obj)
