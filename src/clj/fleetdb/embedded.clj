@@ -28,11 +28,11 @@
 
 (defn- write-to [db write-path]
   (let [dos (io/dos-init write-path)]
-    (doseq [coll (core/query db [:list-collections])]
-      (doseq [records (partition-all 100 (core/query db [:select coll]))]
-        (io/dos-serialize dos [:insert coll (vec records)]))
-      (doseq [ispec (core/query db [:list-indexes coll])]
-        (io/dos-serialize dos [:create-index coll ispec])))
+    (doseq [coll (core/query db ["list-collections"])]
+      (doseq [records (partition-all 100 (core/query db ["select" coll]))]
+        (io/dos-serialize dos ["insert" coll (vec records)]))
+      (doseq [ispec (core/query db ["list-indexes" coll])]
+        (io/dos-serialize dos ["create-index" coll ispec])))
     (io/dos-close dos)))
 
 (defn- init* [db & [other-meta]]
