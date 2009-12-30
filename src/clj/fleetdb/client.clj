@@ -4,8 +4,8 @@
 
 (defn connect [#^String host #^Integer port]
   (let [socket (Socket. host port)]
-    {:parser    (is->parser    (.getInputStream  socket))
-     :generator (os->generator (.getOutputStream socket))
+    {:parser    (io/is->parser    (.getInputStream  socket))
+     :generator (io/os->generator (.getOutputStream socket))
      :socket    socket}))
 
 (defn query [client q]

@@ -96,5 +96,5 @@
       (if-not (identical? elem eof)
         (cons elem (parsed-seq parser))))))
 
-(defn close-parser [#^JsonParser parser]
+(defn parser-close [#^JsonParser parser]
   (.close parser))

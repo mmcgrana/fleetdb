@@ -5,6 +5,8 @@
             (clj-stacktrace [repl :as stacktrace])
             (clojure.contrib [str-utils :as str-utils]))
   (:import  (java.net ServerSocket Socket InetAddress)
+            (java.io OutputStream BufferedOutputStream OutputStreamWriter)
+            (org.codehaus.jackson JsonParseException)
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
@@ -20,11 +22,16 @@
   (or (server-query dba q)
       (embedded/query dba q)))
 
+(defn- write-response [#^OutputStreamWriter out r]
+  (.append out #^CharSequence (io/generate-string r))
+  (.append out "\n\n")
+  (.flush out))
+
 (defn handler [dba #^Socket socket]
   (try
     (with-open [socket    socket
-                generator (io/os->generator (.getOutputStream socket))
-                parser    (io/in->parser    (.getInputStream socket))]
+                out       (OutputStreamWriter. (BufferedOutputStream. (.getOutputStream socket)))
+                parser    (io/is->parser (.getInputStream socket))]
       (.setKeepAlive socket true)
       (loop []
         (if (try
@@ -32,13 +39,13 @@
                 (if (= query io/eof)
                   false
                   (let [result (process-query dba query)]
-                    (io/generate generator [0 result])
+                    (write-response out [0 result])
                     true)))
               (catch Exception e
-                (io/generate out
-                  (if (raised? e)
-                    [1 (str e)]
-                    [2 (pst-str e)]))
+                (write-response out
+                  (if (or (raised? e) (instance? JsonParseException e))
+                    [1 (.getMessage e)]
+                    [2 (stacktrace/pst-str e)]))
                 true))
             (recur))))
     (catch Exception e
@@ -57,7 +64,7 @@
                         (if loading
                           (embedded/load-persistent db-path)
                           (embedded/init-persistent db-path)))]
-    (printf "FleetDB is ready on port %d\n" port)
+    (printf "FleetDB listening on port %d\n" port)
     (flush)
     (loop []
       (let [socket (doto (.accept server-socket))]
@@ -69,7 +76,7 @@
   (println "-f <path>   Path to database log file                      ")
   (println "-e          Ephemeral: do not log changes to disk          ")
   (println "-p <port>   TCP port to listen on (default: 3400)          ")
-  (println "-a <addr>   Local address to listen on (default: localhost)")
+  (println "-a <addr>   Local address to listen on (default: 127.0.0.1)")
   (println "-t <num>    Maximum number of worker threads (default: 100)")
   (println "-h          Print this help and exit.                      "))
 
@@ -96,6 +103,6 @@
         (let [db-path   (.valueOf opt-set "f")
               ephemeral (.has opt-set "e")
               port      (or (parse-int (.valueOf opt-set "p")) 3400)
-              addr      (or (.valueOf opt-set "a") "localhost")
+              addr      (or (.valueOf opt-set "a") "127.0.0.1")
               threads   (or (parse-int (.valueOf opt-set "t")) 100)]
           (run db-path ephemeral port addr threads)))))
