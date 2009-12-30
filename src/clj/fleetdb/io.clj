@@ -24,6 +24,10 @@
     (BufferedWriter. (OutputStreamWriter.
       (FileOutputStream. path #^Boolean (file/exist? path))))))
 
+(defn path->writer [#^String path]
+  (BufferedWriter. (OutputStreamWriter.
+      (FileOutputStream. path #^Boolean (file/exist? path)))))
+
 (defn generate [generator obj]
   (Json/generate generator obj)
   (.flush #^JsonGenerator generator))
@@ -33,8 +37,16 @@
     (generate (writer->generator sw) obj)
     (.toString sw)))
 
+(defn generate-on [writer obj]
+  (.append writer #^CharSequence (generate-string obj))
+  (.append writer "\n")
+  (.flush writer))
+
 (defn generator-close [#^JsonGenerator generator]
   (.close generator))
+
+(defn writer-close [#^Writer writer]
+  (.close writer))
 
 (defn reader->parser [#^Reader reader]
   (.createJsonParser factory reader))

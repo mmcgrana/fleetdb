@@ -9,7 +9,7 @@
   (? (:write-lock (meta dba))))
 
 (defn- persistent? [dba]
-  (? (:generator (meta dba))))
+  (? (:writer (meta dba))))
 
 (defn- ephemeral? [dba]
   (not (persistent? dba)))
@@ -27,13 +27,13 @@
     (reduce replay-query empty queries)))
 
 (defn- write-to [db write-path]
-  (let [generator (io/path->generator write-path)]
+  (let [writer (io/path->writer write-path)]
     (doseq [coll (core/query db ["list-collections"])]
       (doseq [records (partition-all 100 (core/query db ["select" coll]))]
-        (io/generate generator ["insert" coll (vec records)]))
+        (io/generate-on writer ["insert" coll (vec records)]))
       (doseq [ispec (core/query db ["list-indexes" coll])]
-        (io/generate generator ["create-index" coll ispec])))
-    (io/generator-close generator)))
+        (io/generate-on writer ["create-index" coll ispec])))
+    (io/writer-close writer)))
 
 (defn- init* [db & [other-meta]]
   (atom db :meta (assoc other-meta :write-lock (fair-lock/init))))
@@ -45,18 +45,18 @@
   (init* (read-from read-path)))
 
 (defn init-persistent [write-path]
-  (let [generator (io/path->generator write-path)]
-    (init* (core/init) {:generator generator :write-path write-path})))
+  (let [writer (io/path->writer write-path)]
+    (init* (core/init) {:writer writer :write-path write-path})))
 
 (defn load-persistent [read-write-path]
-  (let [db        (read-from read-write-path)
-        generator (io/path->generator read-write-path)]
-    (init* db {:generator generator :write-path read-write-path})))
+  (let [db     (read-from read-write-path)
+        writer (io/path->writer read-write-path)]
+    (init* db {:writer writer :write-path read-write-path})))
 
 (defn close [dba]
   (assert (fair-lock/join (:write-lock (meta dba)) 60))
-  (if-let [generator (:generator (meta dba))]
-    (io/generator-close generator))
+  (if-let [writer (:writer (meta dba))]
+    (io/writer-close writer))
   (assert (compare-and-set! dba @dba nil))
   true)
 
@@ -81,13 +81,13 @@
       (spawn
         (write-to db-comp-start tmp-path)
         (fair-lock/fair-locking (:write-lock (meta dba))
-          (let [generator (io/path->generator tmp-path)]
+          (let [writer (io/path->writer tmp-path)]
             (doseq [post-comp-query (:write-buf (meta dba))]
-              (io/generate generator post-comp-query))
+              (io/generate-on writer post-comp-query))
             (file/mv tmp-path (:write-path (meta dba)))
-            (io/generator-close (:generator (meta dba)))
+            (io/writer-close (:writer (meta dba)))
             (alter-meta! dba dissoc :write-buf)
-            (alter-meta! dba assoc  :generator generator))))
+            (alter-meta! dba assoc  :writer writer))))
       true)))
 
 (defn query* [dba q]
@@ -95,8 +95,8 @@
     (fair-lock/fair-locking (:write-lock (meta dba))
       (let [old-db          @dba
             [new-db result] (core/query* old-db q)]
-        (when-let [generator (:generator (meta dba))]
-          (io/generate generator q)
+        (when-let [writer (:writer (meta dba))]
+          (io/generate-on writer q)
           (when-let [#^ArrayList write-buf (:write-buf (meta dba))]
             (.add write-buf q)))
         (assert (compare-and-set! dba old-db new-db))
