@@ -9,19 +9,21 @@
      (fail ~message ~val)))
 
 (def- query-types
-  #{:insert :select :count :update :delete :explain :list-collections
-    :create-index :drop-index :list-indexes :multi-read :multi-write
-    :checked-write})
+  #{"insert" "select" "count" "update" "delete" "explain" "list-collections"
+    "create-index" "drop-index" "list-indexes" "multi-read" "multi-write"
+    "checked-write"})
 
 (defn- lint-coll [coll]
-  (lint keyword? coll "collection not a keyword"))
+  (lint string? coll "collection not a string"))
+
+(def- attr? string?)
 
 (defn- lint-attr [attr]
-  (lint keyword? attr "attr not a keyword?"))
+  (lint attr? attr "attr not a string"))
 
 (defn val? [v]
   (or (boolean? v) (nil? v)
-      (string? v) (keyword? v) (number? v)))
+      (string? v)  (number? v)))
 
 (defn- lint-val [val]
   (lint val? val "value not of a recognized type"))
@@ -31,7 +33,7 @@
   (lint-val val))
 
 (defn- lint-dir [dir]
-  (lint #{:asc :desc} dir "unrecognized direction"))
+  (lint #{"asc" "desc"} dir "unrecognized direction"))
 
 (defn- lint-record [r]
   (lint map? r "record not a map")
@@ -49,13 +51,13 @@
 
 (defn- lint-order [order]
   (lint vector? order "order not a vector")
-  (if (keyword? (first order))
+  (if (attr? (first order))
     (lint-order-comp order)
     (domap lint-order-comp order)))
 
-(def- sing-ops #{:= :!= :< :<= :> :>=})
-(def- doub-ops #{:>< :>=< :><= :>=<=})
-(def- conj-ops #{:and :or})
+(def- sing-ops #{"=" "!=" "<" "<=" ">" ">="})
+(def- doub-ops #{"><" ">=<" "><=" ">=<="})
+(def- conj-ops #{"and" "or"})
 
 (defn- lint-where [where]
   (lint vector? where "where not a vector")
@@ -81,32 +83,32 @@
          (let [[_ & sub-wheres] where]
            (lint #(not (empty? %)) sub-wheres "no sub clauses given")
            (domap lint-where sub-wheres))
-       (= :in op)
+       (= "in" op)
          (do
-           (lint #(= 3 (count %)) where ":in clause has 2 arguments")
+           (lint #(= 3 (count %)) where "in clause has 2 arguments")
            (let [[_ attr vals] where]
              (lint-attr attr)
-             (lint vector? vals "vals for :in must be in a vector")
+             (lint vector? vals "vals for in must be in a vector")
              (domap lint-val vals)))
        :else
          (fail "unrecognized where operation" op))))
 
 (defn- lint-only [only]
   (cond
-    (keyword? only) :ok
+    (attr?    only) :ok
     (vector?  only) (domap lint-attr only)
-    :else           (fail "unrecognized :only value" only)))
+    :else           (fail "unrecognized only value" only)))
 
 (defn- lint-find-opts [opts allow-only]
   (when-not (nil? opts)
     (lint map? opts "options not a map")
     (doseq [[opt-name opt-val] opts]
       (condp = opt-name
-        :limit  (lint-pos-int opt-val "limit")
-        :offset (lint-pos-int opt-val "offset")
-        :order  (lint-order opt-val)
-        :where  (lint-where opt-val)
-        :only
+        "limit"  (lint-pos-int opt-val "limit")
+        "offset" (lint-pos-int opt-val "offset")
+        "order"  (lint-order opt-val)
+        "where"  (lint-where opt-val)
+        "only"
           (if-not allow-only
             (fail "only option not applicable for this query" opt-val)
             (lint-only opt-val))
@@ -117,19 +119,19 @@
 
 (defn- lint-ispec [ispec]
   (cond
-    (keyword? ispec) :ok
+    (attr?   ispec) :ok
     (vector? ispec)
       (doseq [ispec-comp ispec]
         (cond
-          (keyword? ispec-comp) :ok
+          (attr?   ispec-comp) :ok
           (vector? ispec-comp)
             (lint #(= 2 (count %)) ispec-comp "index spec component vector must have 2 elements")
             (lint-attr (first ispec-comp))
             (lint-dir  (second ispec-comp)))
           :else
-            (fail "index spec component must be a keyword or vector" ispec-comp))
+            (fail "index spec component must be a string or vector" ispec-comp))
     :else
-      (fail "index spec must be a keyword or vector" ispec)))
+      (fail "index spec must be a string or vector" ispec)))
 
 (defn lint-num-args [n q]
   (if (integer? n)
@@ -228,29 +230,29 @@
   (if-not (vector? q)
     (fail "query not a vector" q)
     (condp = (first q)
-      :insert           (lint-insert           q)
-      :select           (lint-select           q)
-      :count            (lint-count            q)
-      :update           (lint-update           q)
-      :delete           (lint-delete           q)
-      :explain          (lint-explain          q)
-      :list-collections (lint-list-collections q)
-      :create-index     (lint-create-index     q)
-      :drop-index       (lint-drop-index       q)
-      :list-indexes     (lint-list-indexes     q)
-      :multi-read       (lint-multi-read       q)
-      :multi-write      (lint-multi-write      q)
-      :checked-write    (lint-checked-write    q)
+      "insert"           (lint-insert           q)
+      "select"           (lint-select           q)
+      "count"            (lint-count            q)
+      "update"           (lint-update           q)
+      "delete"           (lint-delete           q)
+      "explain"          (lint-explain          q)
+      "list-collections" (lint-list-collections q)
+      "create-index"     (lint-create-index     q)
+      "drop-index"       (lint-drop-index       q)
+      "list-indexes"     (lint-list-indexes     q)
+      "multi-read"       (lint-multi-read       q)
+      "multi-write"      (lint-multi-write      q)
+      "checked-write"    (lint-checked-write    q)
       (fail "unrecognized query type" (first q)))))
 
 (defn- lint-read-query [q]
-  (lint #{:select :count :explain :list-collections :list-indexes :multi-read}
+  (lint #{"select" "count" "explain" "list-collections" "list-indexes" "multi-read"}
         (first q)
         "query not a read query")
   (lint-query q))
 
 (defn- lint-write-query [q]
-  (lint #{:insert :update :delete :create-index :drop-index :multi-write :checked-write}
+  (lint #{"insert" "update" "delete" "create-index" "drop-index" "multi-write" "checked-write"}
         (first q)
         "query not a write query")
   (lint-query q))
