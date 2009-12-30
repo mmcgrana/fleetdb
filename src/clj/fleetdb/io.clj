@@ -95,13 +95,14 @@
 
 (def- #^JsonFactory factory (JsonFactory.))
 
-(defn writer-generator
-  [#^Writer writer]
+(defn writer->generator [#^Writer writer]
   (.createJsonGenerator factory writer))
 
-(defn path->generator
-  [#^String path]
-  (writer-generator (BufferedWriter. (FileWriter. path))))
+(defn os->generator [#^OutputStream]
+  (writer->generator (OutputStreamWriter. (BufferedOutputStream. os))))
+
+(defn path->generator [#^String path]
+  (writer->generator (BufferedWriter. (FileWriter. path))))
 
 (defn generate [generator obj]
   (Json/generate generator obj)
@@ -112,12 +113,16 @@
     (generate (writer-generator sw) obj)
     (.toString sw)))
 
-(defn reader-parser
-  [#^Reader reader]
+(defn generator-close [#^JsonGenerator generator]
+  (.close generator))
+
+(defn reader->parser [#^Reader reader]
   (.createJsonParser factory reader))
 
-(defn path->parser
-  [#^String path]
+(defn is->parser [#^InputStream is]
+  (reader->parser (InputStreamReader. (BufferedInputStream. is))))
+
+(defn path->parser [#^String path]
   (reader-parser (BufferedReader. (FileReader. path))))
 
 (defn parse [parser eof]
@@ -131,3 +136,6 @@
     (let [elem (parse parser eof)]
       (if-not (identical? elem eof)
         (cons elem (parsed-seq parser))))))
+
+(defn close-parser [#^JsonParser parser]
+  (.close parser))
