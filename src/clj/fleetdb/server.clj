@@ -1,128 +1,54 @@
 (ns fleetdb.server
   (:use     (fleetdb util))
-  (:require (fleetdb [embedded :as embedded] [io :as io] [file :as file]
-                     [thread-pool :as thread-pool])
+  (:require (fleetdb [embedded :as embedded] [io :as io]
+                     [file :as file] [thread-pool :as thread-pool])
             (clj-stacktrace [repl :as stacktrace])
             (clojure.contrib [str-utils :as str-utils]))
   (:import  (java.net ServerSocket Socket InetAddress)
-            (java.io PushbackReader BufferedReader InputStreamReader
-                     PrintWriter    BufferedWriter OutputStreamWriter
-                     DataInputStream  BufferedInputStream  InputStream
-                     DataOutputStream BufferedOutputStream OutputStream)
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
 (defn- server-query [dba q]
   (let [[q-type q-opt] q]
     (condp = q-type
-      :ping     "pong"
-      :compact  (embedded/compact dba)
-      :snapshot (embedded/snapshot dba q-opt)
+      "ping"     "pong"
+      "compact"  (embedded/compact dba)
+      "snapshot" (embedded/snapshot dba q-opt)
       nil)))
 
 (defn- process-query [dba q]
   (or (server-query dba q)
       (embedded/query dba q)))
 
-(defn generic-handler [init-out init-in read-query write-response write-error]
-  (fn [dba #^Socket socket]
-    (try
-      (with-open [socket socket
-                  out    (init-out (.getOutputStream socket))
-                  in     (init-in  (.getInputStream socket))]
-        (.setKeepAlive socket true)
-        (loop []
-          (if (try
-                (let [query (read-query in io/eof)]
-                  (if (= query io/eof)
-                    false
-                    (let [result (process-query dba query)]
-                      (write-response out result)
-                      true)))
-                (catch Exception e
-                  (write-error out e)
-                  true))
-              (recur))))
-      (catch Exception e
-        (stacktrace/pst-on System/err false e)
-        (.println System/err)))))
+(defn handler [dba #^Socket socket]
+  (try
+    (with-open [socket    socket
+                generator (io/os->generator (.getOutputStream socket))
+                parser    (io/in->parser    (.getInputStream socket))]
+      (.setKeepAlive socket true)
+      (loop []
+        (if (try
+              (let [query (io/parse parser io/eof)]
+                (if (= query io/eof)
+                  false
+                  (let [result (process-query dba query)]
+                    (io/generate generator [0 result])
+                    true)))
+              (catch Exception e
+                (io/generate out
+                  (if (raised? e)
+                    [1 (str e)]
+                    [2 (pst-str e)]))
+                true))
+            (recur))))
+    (catch Exception e
+      (stacktrace/pst-on System/err false e)
+      (.println System/err))))
 
-(def- text-handler
-  (generic-handler
-    (fn [#^OutputStream os]
-      (PrintWriter. (BufferedWriter. (OutputStreamWriter. os))))
-    (fn [#^InputStream is]
-      (PushbackReader. (BufferedReader. (InputStreamReader. is))))
-    (fn [#^PushbackReader in eof-val]
-      (read in false eof-val))
-    (fn [#^PrintWriter out val]
-      (.println out (pr-str val))
-      (.println out)
-      (.flush out))
-    (fn [#^PrintWriter out e]
-      (let [msg (if (raised? e) (str e) (stacktrace/pst-str e))]
-        (.println out msg)
-        (.println out)
-        (.flush out)))))
-
-(def- binary-handler
-  (generic-handler
-    (fn [#^OutputStream os]
-      (DataOutputStream. (BufferedOutputStream. os)))
-    (fn [#^InputStream is]
-      (DataInputStream.  (BufferedInputStream. is)))
-    (fn [#^DataInputStream in eof-val]
-      (io/dis-deserialize in io/eof))
-    (fn [#^DataOutputStream out val]
-      (io/dos-serialize out [0 val]))
-    (fn [#^DataOutputStream out e]
-      (let [msg (if (raised? e) (str e) (stacktrace/pst-str e))]
-        (io/dos-serialize out [1 msg])))))
-
-(def- bert-handler
-  (generic-handler
-    (fn [#^OutputStream os]
-      (DataOutputStream. (BufferedOutputStream. os)))
-    (fn [#^InputStream is]
-      (DataInputStream.  (BufferedInputStream.  is)))
-    (fn [#^DataInputStream in eof-val]
-      (io/dis-berp-decode in io/eof))
-    (fn [#^DataOutputStream out val]
-      (io/dos-berp-encode out [0 val]))
-    (fn [#^DataOutputStream out e]
-      (let [msg (if (raised? e) (str e) (stacktrace/pst-str e))]
-        (io/dos-berp-encode out [1 msg])))))
-
-(def- bert-rpc-handler
-  (generic-handler
-    (fn [os]
-      (DataOutputStream. (BufferedOutputStream. os)))
-    (fn [is]
-      (DataInputStream. (BufferedInputStream. is)))
-    (fn [in eof-val]
-      (let [d (io/dis-berp-decode in io/eof)]
-        (if (= d io/eof)
-          d
-          (let [[call server query [q]] d]
-            q))))
-    (fn [out val]
-      (io/dos-berp-encode out [:reply val]))
-    (fn [out e]
-      (let [bert (if (raised? e)
-                   [:error [:user   0 "Exception"          (str e) (list)]]
-                   [:error [:server 0 (.getName (class e)) (str e)
-                     (next (str-utils/re-split #"\n" (stacktrace/pst-str e)))]])]
-        (io/dos-berp-encode out bert)))))
-
-(def- protocol-handlers
-  {:text text-handler :binary binary-handler
-   :bert bert-handler :bert-rpc bert-rpc-handler})
-
-(defn run [db-path ephemeral port addr threads protocol]
+(defn run [db-path ephemeral port addr threads]
   (let [inet          (InetAddress/getByName addr)
         server-socket (ServerSocket. port 10000 inet)
         pool          (thread-pool/init threads)
-        handler       (protocol-handlers protocol)
         loading       (and db-path (file/exist? db-path))
         dba           (if ephemeral
                         (if loading
@@ -131,7 +57,7 @@
                         (if loading
                           (embedded/load-persistent db-path)
                           (embedded/init-persistent db-path)))]
-    (printf "FleetDB serving '%s' protocol on port %d\n" (name protocol) port)
+    (printf "FleetDB is ready on port %d\n" port)
     (flush)
     (loop []
       (let [socket (doto (.accept server-socket))]
@@ -139,24 +65,23 @@
       (recur))))
 
 (defn- print-help []
-  (println "FleetDB Server                                                               ")
-  (println "-f <path>   Path to database log file                                        ")
-  (println "-e          Ephemeral: do not log changes to disk                            ")
-  (println "-p <port>   TCP port to listen on (default: 3400)                            ")
-  (println "-a <addr>   Local address to listen on (default: 127.0.0.1)                  ")
-  (println "-t <num>    Maximum number of worker threads (default: 100)                  ")
-  (println "-i <name>   Client/server protocol: one of {text,binary,bert,bert-rpc} (default: bert)")
-  (println "-h          Print this help and exit.                                        "))
+  (println "FleetDB Server                                             ")
+  (println "-f <path>   Path to database log file                      ")
+  (println "-e          Ephemeral: do not log changes to disk          ")
+  (println "-p <port>   TCP port to listen on (default: 3400)          ")
+  (println "-a <addr>   Local address to listen on (default: localhost)")
+  (println "-t <num>    Maximum number of worker threads (default: 100)")
+  (println "-h          Print this help and exit.                      "))
 
 (defn- parse-int [s]
   (and s (Integer/decode s)))
 
 (defn -main [& args]
-  (let [args-array  (into-array String args)
-        opt-parser (OptionParser. "f:ep:a:t:i:h")
+  (let [args-array (into-array String args)
+        opt-parser (OptionParser. "f:ep:a:t:h")
         opt-set    (.parse opt-parser args-array)]
     (cond
-      (not-any? #(.has opt-set #^String %) ["f" "e" "p" "a" "t" "i" "h"])
+      (not-any? #(.has opt-set #^String %) ["f" "e" "p" "a" "t" "h"])
         (print-help)
       (.has opt-set "h")
         (print-help)
@@ -171,7 +96,6 @@
         (let [db-path   (.valueOf opt-set "f")
               ephemeral (.has opt-set "e")
               port      (or (parse-int (.valueOf opt-set "p")) 3400)
-              addr      (or (.valueOf opt-set "a") "127.0.0.1")
-              threads   (or (parse-int (.valueOf opt-set "t")) 100)
-              protocol  (or (keyword (or (.valueOf opt-set "i") "bert")))]
-          (run db-path ephemeral port addr threads protocol)))))
+              addr      (or (.valueOf opt-set "a") "localhost")
+              threads   (or (parse-int (.valueOf opt-set "t")) 100)]
+          (run db-path ephemeral port addr threads)))))
