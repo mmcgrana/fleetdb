@@ -1,11 +1,16 @@
 (ns fleetdb.io
-  (:import (fleetdb Serializer)
-           (fleetdb Bert)
+  (:import (fleetdb Serializer Bert Json)
+           (org.codehaus.jackson JsonFactory JsonParser JsonGenerator)
            (java.io ByteArrayOutputStream ByteArrayInputStream
                     FileOutputStream BufferedOutputStream DataOutputStream
                     FileInputStream  BufferedInputStream  DataInputStream
+                    FileWriter       BufferedWriter
+                    FileReader       BufferedReader
+                    StringWriter     StringReader
+                    Writer           Reader
                     EOFException))
-  (:require (fleetdb [file :as file])))
+  (:require (fleetdb [file :as file]))
+  (:use (fleetdb [util :only (def-)])))
 
 (def eof (Object.))
 
@@ -87,3 +92,42 @@
       (bert-decode bytes eof-val))
     (catch EOFException e
       eof-val)))
+
+(def- #^JsonFactory factory (JsonFactory.))
+
+(defn writer-generator
+  [#^Writer writer]
+  (.createJsonGenerator factory writer))
+
+(defn path->generator
+  [#^String path]
+  (writer-generator (BufferedWriter. (FileWriter. path))))
+
+(defn generate [generator obj]
+  (Json/generate generator obj)
+  (.flush #^JsonGenerator generator))
+
+(defn generate-string [obj]
+  (let [sw (StringWriter.)]
+    (generate (writer-generator sw) obj)
+    (.toString sw)))
+
+(defn reader-parser
+  [#^Reader reader]
+  (.createJsonParser factory reader))
+
+(defn path->parser
+  [#^String path]
+  (reader-parser (BufferedReader. (FileReader. path))))
+
+(defn parse [parser eof]
+  (Json/parse parser true eof))
+
+(defn parse-string [string eof]
+  (parse (reader-parser (StringReader. string)) eof))
+
+(defn parsed-seq [parser]
+  (lazy-seq
+    (let [elem (parse parser eof)]
+      (if-not (identical? elem eof)
+        (cons elem (parsed-seq parser))))))
