@@ -28,4 +28,3 @@
           r2 (client/query client ["select" "elems"])]
       (assert= r1 1)
       (assert= r2 [{"id" 1}]))))
-7327893722

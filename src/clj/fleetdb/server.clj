@@ -24,7 +24,7 @@
 
 (defn- write-response [#^OutputStreamWriter out r]
   (.append out #^CharSequence (io/generate-string r))
-  (.append out "\n\n")
+  (.append out "\n")
   (.flush out))
 
 (defn handler [dba #^Socket socket]

@@ -13,7 +13,8 @@
   (let [resp (io/parse (:parser client) io/eof)]
     (if (identical? resp io/eof)
       (throw (Exception. "End of server input."))
-      resp)))
+      (let [[status result] resp]
+        (if (zero? status) result (throw (Exception. result)))))))
 
 (defn close [client]
   (io/parser-close    (:parser    client))
