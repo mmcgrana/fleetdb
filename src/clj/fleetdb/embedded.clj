@@ -2,7 +2,8 @@
   (:use [fleetdb.util :only (def- ? spawn rassert raise)]
         [clojure.contrib.seq-utils :only (partition-all)])
   (:require (fleetdb [types :as types] [lint :as lint] [core :as core]
-                     [fair-lock :as fair-lock] [file :as file] [json :as json]))
+                     [fair-lock :as fair-lock] [file :as file])
+            [clj-json :as json])
   (:import  (java.util ArrayList)
             (java.io FileReader BufferedReader FileWriter BufferedWriter)))
 
@@ -23,7 +24,7 @@
 
 (defn- read-db [read-path]
   (let [reader  (BufferedReader. (FileReader. #^String read-path))
-        queries (json/parse-lines reader)
+        queries (json/parsed-seq reader)
         empty   (core/init)]
     (reduce replay-query empty queries)))
 

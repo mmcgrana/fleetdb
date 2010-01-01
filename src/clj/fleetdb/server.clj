@@ -1,9 +1,10 @@
 (ns fleetdb.server
   (:use     (fleetdb util))
-  (:require (fleetdb [embedded :as embedded] [json :as json] [lint :as lint]
-                     [file :as file] [thread-pool :as thread-pool])
+  (:require (fleetdb [file :as file] [thread-pool :as thread-pool]
+                     [lint :as lint] [embedded :as embedded])
             (clj-stacktrace [repl :as stacktrace])
-            (clojure.contrib [str-utils :as str-utils]))
+            (clojure.contrib [str-utils :as str-utils])
+            [clj-json :as json])
   (:import  (java.net ServerSocket Socket InetAddress)
             (java.io BufferedWriter OutputStreamWriter
                      BufferedReader InputStreamReader)
