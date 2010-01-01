@@ -6,5 +6,5 @@
   'fleetdb.compare-test
   'fleetdb.core-test
   'fleetdb.embedded-test
-  ;'fleetdb.server-test
+  'fleetdb.server-test
 )
