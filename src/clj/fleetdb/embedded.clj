@@ -2,8 +2,9 @@
   (:use [fleetdb.util :only (def- ? spawn rassert raise)]
         [clojure.contrib.seq-utils :only (partition-all)])
   (:require (fleetdb [types :as types] [lint :as lint] [core :as core]
-                     [fair-lock :as fair-lock] [file :as file] [io :as io]))
-  (:import  (java.util ArrayList)))
+                     [fair-lock :as fair-lock] [file :as file] [json :as json]))
+  (:import  (java.util ArrayList)
+            (java.io FileReader BufferedReader FileWriter BufferedWriter)))
 
 (defn- dba? [dba]
   (? (:write-lock (meta dba))))
@@ -18,22 +19,40 @@
   (? (:write-buf (meta dba))))
 
 (defn- replay-query [db q]
-  (first (core/query db q)))
+  (first (core/query* db q)))
 
-(defn- read-from [read-path]
-  (let [parser  (io/path->parser read-path)
-        queries (io/parsed-seq parser)
+(defn- read-db [read-path]
+  (let [reader  (BufferedReader. (FileReader. #^String read-path))
+        queries (json/parse-lines reader)
         empty   (core/init)]
     (reduce replay-query empty queries)))
 
-(defn- write-to [db write-path]
-  (let [writer (io/path->writer write-path)]
-    (doseq [coll (core/query db ["list-collections"])]
-      (doseq [records (partition-all 100 (core/query db ["select" coll]))]
-        (io/generate-on writer ["insert" coll (vec records)]))
-      (doseq [ispec (core/query db ["list-indexes" coll])]
-        (io/generate-on writer ["create-index" coll ispec])))
-    (io/writer-close writer)))
+(defn- new-writer [write-path]
+  (let [appending (file/exist? write-path)]
+    (BufferedWriter. (FileWriter. #^String write-path appending))))
+
+(defn- close-writer [#^BufferedWriter writer]
+  (.close writer))
+
+(defn- write-query [#^BufferedWriter writer query]
+  (.write writer #^String (json/generate-string query))
+  (.flush writer))
+
+(defn- write-queries [#^BufferedWriter writer queries]
+  (doseq [q queries]
+    (.write writer #^String (json/generate-string q))
+    (.flush writer)))
+
+(defn- write-db [write-path db]
+  (let [writer (new-writer write-path)]
+    (doseq [coll (core/query* db ["list-collections"])]
+      (write-queries writer
+        (for [chunk (partition-all 100 (core/query* db ["select" coll]))]
+          ["insert" coll chunk]))
+      (write-queries writer
+        (for [ispec (core/query* db ["list-indexes" coll])]
+          ["create-index" coll ispec])))
+    (close-writer writer)))
 
 (defn- init* [db & [other-meta]]
   (atom db :meta (assoc other-meta :write-lock (fair-lock/init))))
@@ -42,21 +61,22 @@
   (init* (core/init)))
 
 (defn load-ephemeral [read-path]
-  (init* (read-from read-path)))
+  (init* (read-db read-path)))
 
 (defn init-persistent [write-path]
-  (let [writer (io/path->writer write-path)]
-    (init* (core/init) {:writer writer :write-path write-path})))
+  (init* (core/init)
+         {:writer (new-writer write-path)
+          :write-path write-path}))
 
 (defn load-persistent [read-write-path]
-  (let [db     (read-from read-write-path)
-        writer (io/path->writer read-write-path)]
-    (init* db {:writer writer :write-path read-write-path})))
+  (init* (read-db read-write-path)
+         {:writer (new-writer read-write-path)
+          :write-path read-write-path}))
 
 (defn close [dba]
   (assert (fair-lock/join (:write-lock (meta dba)) 60))
   (if-let [writer (:writer (meta dba))]
-    (io/writer-close writer))
+    (close-writer writer))
   (assert (compare-and-set! dba @dba nil))
   true)
 
@@ -67,7 +87,7 @@
 (defn snapshot [dba snapshot-path]
   (rassert (ephemeral? dba) "cannot snapshot persistent databases")
   (let [tmp-path  (file/tmp-path "/tmp" "snapshot")]
-    (write-to @dba tmp-path)
+    (write-db tmp-path @dba)
     (file/mv tmp-path snapshot-path)
     true))
 
@@ -75,17 +95,16 @@
   (rassert (persistent? dba) "cannot compact ephemeral database")
   (rassert (not (compacting? dba)) "already compacting database")
   (fair-lock/fair-locking (:write-lock (meta dba))
-    (let [tmp-path      (file/tmp-path "/tmp" "compact")
-          db-comp-start @dba]
+    (let [tmp-path    (file/tmp-path "/tmp" "compact")
+          db-at-start @dba]
       (alter-meta! dba assoc :write-buf (ArrayList.))
       (spawn
-        (write-to db-comp-start tmp-path)
+        (write-db tmp-path db-at-start)
         (fair-lock/fair-locking (:write-lock (meta dba))
-          (let [writer (io/path->writer tmp-path)]
-            (doseq [post-comp-query (:write-buf (meta dba))]
-              (io/generate-on writer post-comp-query))
+          (let [writer (new-writer tmp-path)]
+            (write-queries writer (:write-buf (meta dba)))
             (file/mv tmp-path (:write-path (meta dba)))
-            (io/writer-close (:writer (meta dba)))
+            (close-writer (:writer (meta dba)))
             (alter-meta! dba dissoc :write-buf)
             (alter-meta! dba assoc  :writer writer))))
       true)))
@@ -96,9 +115,9 @@
       (let [old-db          @dba
             [new-db result] (core/query* old-db q)]
         (when-let [writer (:writer (meta dba))]
-          (io/generate-on writer q)
-          (when-let [#^ArrayList write-buf (:write-buf (meta dba))]
-            (.add write-buf q)))
+          (write-query writer q)
+          (when-let [write-buf (:write-buf (meta dba))]
+            (.add #^ArrayList write-buf q)))
         (assert (compare-and-set! dba old-db new-db))
         result))
     (core/query* @dba q)))

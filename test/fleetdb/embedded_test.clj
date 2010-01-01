@@ -1,5 +1,5 @@
 (ns fleetdb.embedded-test
-  (:require (fleetdb [embedded :as embedded] [io :as io] [file :as file]))
+  (:require (fleetdb [embedded :as embedded] [file :as file]))
   (:use (clj-unit core) (fleetdb util)))
 
 (defmacro- with-dba [[name dba-form] & body]

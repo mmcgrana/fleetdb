@@ -1,46 +1,41 @@
 (ns fleetdb.server
   (:use     (fleetdb util))
-  (:require (fleetdb [embedded :as embedded] [io :as io]
+  (:require (fleetdb [embedded :as embedded] [json :as json] [lint :as lint]
                      [file :as file] [thread-pool :as thread-pool])
             (clj-stacktrace [repl :as stacktrace])
             (clojure.contrib [str-utils :as str-utils]))
   (:import  (java.net ServerSocket Socket InetAddress)
-            (java.io OutputStream BufferedOutputStream OutputStreamWriter)
+            (java.io BufferedWriter OutputStreamWriter
+                     BufferedReader InputStreamReader)
             (org.codehaus.jackson JsonParseException)
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
-(defn- server-query [dba q]
-  (let [[q-type q-opt] q]
-    (condp = q-type
-      "ping"     "pong"
-      "compact"  (embedded/compact dba)
-      "snapshot" (embedded/snapshot dba q-opt)
-      nil)))
-
 (defn- process-query [dba q]
-  (or (server-query dba q)
-      (embedded/query dba q)))
+  (lint/lint-query q)
+  (condp = (first q)
+    "ping"    "pong"
+    "compact" (embedded/compact dba)
+    (embedded/query* dba q)))
 
-(defn- write-response [#^OutputStreamWriter out r]
-  (.append out #^CharSequence (io/generate-string r))
-  (.append out "\n")
+(defn- write-response [#^BufferedWriter out resp]
+  (.write out #^String (json/generate-string resp))
+  (.write out "\n")
   (.flush out))
 
 (defn handler [dba #^Socket socket]
   (try
-    (with-open [socket    socket
-                out       (OutputStreamWriter. (BufferedOutputStream. (.getOutputStream socket)))
-                parser    (io/is->parser (.getInputStream socket))]
+    (with-open [socket socket
+                in     (BufferedReader. (InputStreamReader.  (.getInputStream socket)))
+                out    (BufferedWriter. (OutputStreamWriter. (.getOutputStream socket)))]
       (.setKeepAlive socket true)
       (loop []
         (if (try
-              (let [query (io/parse parser io/eof)]
-                (if (= query io/eof)
-                  false
-                  (let [result (process-query dba query)]
-                    (write-response out [0 result])
-                    true)))
+              (if-let [in-line (.readLine in)]
+                (let [query  (json/parse-string in-line)
+                      result (process-query dba query)]
+                  (write-response out [0 result])
+                  true))
               (catch Exception e
                 (write-response out
                   (if (or (raised? e) (instance? JsonParseException e))

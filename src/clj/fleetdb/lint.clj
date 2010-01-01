@@ -227,6 +227,12 @@
     (lint-read-query read-query)
     (lint-write-query write-query)))
 
+(defn- lint-ping [q]
+  (lint-num-args 0 q))
+
+(defn- lint-compact [q]
+  (lint-num-args 0 q))
+
 (defn lint-query [q]
   (if-not (vector? q)
     (fail "query not a vector" q)
@@ -244,6 +250,8 @@
       "multi-read"       (lint-multi-read       q)
       "multi-write"      (lint-multi-write      q)
       "checked-write"    (lint-checked-write    q)
+      "ping"             (lint-ping             q)
+      "compact"          (lint-compact          q)
       (fail "unrecognized query type" (first q)))))
 
 (defn- lint-read-query [q]

@@ -335,7 +335,7 @@
     (assert= r2  1)
     (assert= r2d 0)
     (assert= ["name"] (core/query db1-1 ["list-indexes" "elems"]))
-    (assert= [] (core/query db1-2 ["list-indexes" "elems"]))))
+    (assert= (list) (core/query db1-2 ["list-indexes" "elems"]))))
 
 (deftest "list-indexes: none"
   (assert= [] (core/query db1 ["list-indexes" "foos"])))

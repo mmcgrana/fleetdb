@@ -12,7 +12,9 @@ import clojure.lang.Keyword;
 import clojure.lang.PersistentArrayMap;
 import clojure.lang.PersistentVector;
 import clojure.lang.ITransientMap;
+import clojure.lang.IPersistentList;
 import clojure.lang.ITransientCollection;
+import clojure.lang.Seqable;
 
 public class Json {
   public static void generate(JsonGenerator jg, Object obj) throws Exception {
@@ -35,11 +37,18 @@ public class Json {
     
     } else if (obj instanceof IPersistentVector) {
       IPersistentVector vec = (IPersistentVector) obj;
-      ISeq vSeq = vec.seq();
       jg.writeStartArray();
-      while (vSeq != null) {
-        generate(jg, vSeq.first());
-        vSeq = vSeq.next();
+      for (int i = 0; i < vec.count(); i++) {
+        generate(jg, vec.nth(i));
+      }
+      jg.writeEndArray();
+    
+    } else if ((obj instanceof ISeq) || (obj instanceof IPersistentList)) {
+      ISeq lSeq = ((Seqable) obj).seq();
+      jg.writeStartArray();
+      while (lSeq != null) {
+        generate(jg, lSeq.first());
+        lSeq = lSeq.next();
       }
       jg.writeEndArray();
     

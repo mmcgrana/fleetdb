@@ -306,7 +306,7 @@
 (defmethod exec-plan "only" [db [_ only source]]
   (condv only
     vector?
-      (map (fn [r] (vec-map #(r %) only)) (exec-plan db source))
+      (map (fn [r] (map #(r %) only)) (exec-plan db source))
     string?
       (map (fn [r] (r only)) (exec-plan db source))))
 
@@ -370,7 +370,8 @@
   (keys (get-in db [coll :imap])))
 
 (defn- find-records [db coll opts]
-  (exec-plan db (find-plan coll (coll-ispecs db coll) opts)))
+  (or (exec-plan db (find-plan coll (coll-ispecs db coll) opts))
+      (list)))
 
 
 ;; RMap and IMap manipulation
@@ -448,7 +449,7 @@
 (defmulti query* (fn [db q] (first q)))
 
 (defmethod query* "select" [db [_ coll opts]]
-  (vec (find-records db coll opts)))
+  (find-records db coll opts))
 
 (defmethod query* "count" [db [_ coll opts]]
   (count (find-records db coll opts)))
@@ -485,11 +486,11 @@
     (if (= "update" query-type) e4 e3)))
 
 (defmethod query* "list-collections" [db _]
-  (vec-map first
-    (filter
-      (fn [[coll {rmap :rmap imap :imap}]]
-        (or (not (empty? rmap)) (not (empty? imap))))
-      db)))
+  (or (map first (filter
+                   (fn [[coll {rmap :rmap imap :imap}]]
+                     (or (not (empty? rmap)) (not (empty? imap))))
+                   db))
+      (list)))
 
 (defmethod query* "create-index" [db [_ coll ispec]]
   (if (get-in db [coll :imap ispec])
@@ -504,10 +505,10 @@
     [(core/dissoc-in db [coll :imap ispec]) 1]))
 
 (defmethod query* "list-indexes" [db [_ coll]]
-  (vec (keys (get-in db [coll :imap]))))
+  (or (keys (get-in db [coll :imap])) (list)))
 
 (defmethod query* "multi-read" [db [_ queries]]
-  (vec-map #(query* db %) queries))
+  (map #(query* db %) queries))
 
 (defmethod query* "multi-write" [db [_ queries]]
   (reduce

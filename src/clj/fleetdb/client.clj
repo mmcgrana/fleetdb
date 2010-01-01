@@ -1,22 +1,29 @@
 (ns fleetdb.client
-  (:require (fleetdb [io :as io]))
-  (:import (java.net Socket)))
+  (:require (fleetdb [json :as json]))
+  (:import (java.net Socket)
+           (java.io  OutputStreamWriter BufferedWriter
+                     InputStreamReader BufferedReader)))
 
 (defn connect [#^String host #^Integer port]
   (let [socket (Socket. host port)]
-    {:parser    (io/is->parser    (.getInputStream  socket))
-     :generator (io/os->generator (.getOutputStream socket))
-     :socket    socket}))
+    {:writer (BufferedWriter. (OutputStreamWriter. (.getOutputStream  socket)))
+     :reader (BufferedReader. (InputStreamReader.  (.getInputStream socket)))
+     :socket socket}))
 
 (defn query [client q]
-  (io/generate (:generator client) q)
-  (let [resp (io/parse (:parser client) io/eof)]
-    (if (identical? resp io/eof)
-      (throw (Exception. "End of server input."))
-      (let [[status result] resp]
-        (if (zero? status) result (throw (Exception. result)))))))
+  (let [#^BufferedWriter writer (:writer client)
+        #^BufferedReader reader (:reader client)]
+    (.write writer #^String (json/generate-string q))
+    (.write writer "\n")
+    (.flush writer)
+    (if-let [in-line (.readLine reader)]
+      (let [[status result] (json/parse-string in-line)]
+        (if (zero? status)
+          result
+          (throw (Exception. #^String result))))
+      (throw (Exception. "No response from server.")))))
 
 (defn close [client]
-  (io/parser-close    (:parser    client))
-  (io/generator-close (:generator client))
-  (.close    #^Socket (:socket    client)))
+  (.close #^BufferedReader (:reader client))
+  (.close #^BufferedWriter (:writer client))
+  (.close #^Socket         (:socket client)))
