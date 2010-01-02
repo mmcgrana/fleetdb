@@ -37,6 +37,7 @@
 
 (defn- write-query [#^BufferedWriter writer query]
   (.write writer #^String (json/generate-string query))
+  (.write writer "\r\n")
   (.flush writer))
 
 (defn- write-queries [#^BufferedWriter writer queries]
