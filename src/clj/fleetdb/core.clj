@@ -385,26 +385,30 @@
     (assoc rmap (record "id") record)))
 
 (defn- rmap-update [rmap old-record new-record]
+  (assert (= (old-record "id") (new-record "id")))
   (assoc rmap (old-record "id") new-record))
 
 (defn- rmap-delete [rmap old-record]
+  (assert (contains? rmap (old-record "id")))
   (dissoc rmap (old-record "id")))
 
 (defn- ispec-on-fn [ispec]
-  (let [nispec (normalize-ispec ispec)]
-    (let [attrs  (map first nispec)
-          nattrs (count nispec)]
-      (cond!
-        (= nattrs 1) (let [attr (first attrs)] #(get % attr))
-        (> nattrs 1) #(vec-map (fn [attr] (get % attr)) attrs)))))
+  (let [nispec (normalize-ispec ispec)
+        attrs  (map first nispec)
+        nattrs (count nispec)]
+    (cond!
+      (= nattrs 1) (let [attr (first attrs)] #(% attr))
+      (> nattrs 1) #(vec-map (fn [attr] (% attr)) attrs))))
 
 (defn- index-insert [index on-fn record]
   (update index (on-fn record)
     (fn [indexed]
       (cond
         (nil? indexed) record
-        (set? indexed) (conj indexed record)
-        :single-record (hash-set indexed record)))))
+        (set? indexed) (do (assert (not (contains? indexed record)))
+                           (conj indexed record))
+        :single-record (do (assert (not (= indexed record)))
+                           (hash-set indexed record))))))
 
 (defn- index-delete [index on-fn record]
   (let [aval    (on-fn record)
@@ -425,7 +429,9 @@
       records)))
 
 (defn- imap-apply [imap apply-fn]
-  (mash (fn [ispec index] (apply-fn (ispec-on-fn ispec) index)) imap))
+  (mash (fn [ispec index]
+          (apply-fn (ispec-on-fn ispec) index))
+        imap))
 
 (defn- imap-insert [imap record]
   (imap-apply imap
@@ -441,7 +447,8 @@
 
 (defn- imap-delete [imap record]
   (imap-apply imap
-    (fn [on-fn index] (index-delete index on-fn record))))
+    (fn [on-fn index]
+      (index-delete index on-fn record))))
 
 
 ;; Query implementations
