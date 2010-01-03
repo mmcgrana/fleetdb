@@ -40,6 +40,15 @@
   (lint map? r "record not a map")
   (domap lint-prop r))
 
+(defn- lint-update-spec [us]
+  (lint map? us "update spec not a map")
+  (doseq [[attr val :as prop] us]
+    (if (= "$inc" attr)
+      (let [[on-attr by-param] (first val)]
+        (lint-attr on-attr)
+        (lint number? by-param "inc amount was not a number"))
+      (lint-prop prop))))
+
 (defn- lint-pos-int [i type]
   (lint #(and (integer? %) (pos? %)) i
     (str type " not a positive integer")))
@@ -176,9 +185,9 @@
 
 (defn- lint-update [q]
   (lint-num-args #{2 3} q)
-  (let [[_ coll up-map find-opts] q]
+  (let [[_ coll update-spec find-opts] q]
     (lint-coll coll)
-    (lint-record up-map)
+    (lint-update-spec update-spec)
     (lint-find-opts find-opts false)))
 
 (defn- lint-delete [q]

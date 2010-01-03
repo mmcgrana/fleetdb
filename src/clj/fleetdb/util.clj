@@ -63,12 +63,6 @@
 (defn update [m k f & args]
   (assoc m k (apply f (get m k) args)))
 
-(defn merge-compact [m1 m2]
-  (reduce
-    (fn [m-int [k v]]
-      (if (nil? v) (dissoc m-int k) (assoc m-int k v)))
-    m1 m2))
-
 (defn uniq [coll]
   (lazy-seq
     (when-let [s (seq coll)]

@@ -266,6 +266,13 @@
   (let [[db2-1 _] (core/query db2 ["insert" "elems" {"id" 7}])]
     (core/query db2-1 ["update" "elems" {"lt" "f"} {"where" ["=" "id" 7]}])))
 
+(deftest "update: inc"
+  (let [[db1-1 c] (core/query db1
+                    ["update" "elems" {"$inc" {"num" 1}} {"where" ["=" "id" 1]}])]
+    (assert= 1 c)
+    (assert= [2] (core/query db1-1
+                   ["select" "elems" {"where" ["=" "id" 1] "only" "num"}]))))
+
 (deftest "delete"
   (let [[db1-1 c] (core/query db1 ["delete" "elems" {"where" ["in" "id" [2 4]]}])]
     (assert= 2 c)
