@@ -328,7 +328,7 @@
 
 (defn- indexed-flatten1 [indexed]
   (cond (nil? indexed) nil
-        (set? indexed) indexed
+        (set? indexed) (seq indexed)
         :single        (list indexed)))
 
 (defn- indexed-flatten [indexeds]

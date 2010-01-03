@@ -79,6 +79,11 @@
            (core/query db1
              ["select" "elems" {"where" ["in" "id" [4 2]] "only" "lt"}])))
 
+(deftest "select: index lookup seqing"
+  (let [db2-1 (first (core/query db2 ["insert" "elems" {"id" 7 "lt" "d"}]))]
+    (assert-not-fn set? (core/query db2-1
+                          ["select" "elems" {"where" ["=" "lt" "d"]}]))))
+
 (deftest "explain: select, count, update, delete"
   (let [coll      "elems"
         find-opts {"where" ["=" "id" 3]}
