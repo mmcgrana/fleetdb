@@ -236,6 +236,10 @@
     (lint-read-query read-query)
     (lint-write-query write-query)))
 
+(defn- lint-auth [q]
+  (lint-num-args 1 q)
+  (lint string? (second q) "password not a string"))
+
 (defn- lint-ping [q]
   (lint-num-args 0 q))
 
@@ -259,6 +263,7 @@
       "multi-read"       (lint-multi-read       q)
       "multi-write"      (lint-multi-write      q)
       "checked-write"    (lint-checked-write    q)
+      "auth"             (lint-auth             q)
       "ping"             (lint-ping             q)
       "compact"          (lint-compact          q)
       (fail "unrecognized query type" (first q)))))

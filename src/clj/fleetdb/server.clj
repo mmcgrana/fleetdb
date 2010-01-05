@@ -12,43 +12,54 @@
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
-(defn- process-query [dba q]
+(defn- process-query [dba q needs-auth? password]
   (lint/lint-query q)
-  (condp = (first q)
-    "ping"    "pong"
-    "compact" (embedded/compact dba)
-    (embedded/query* dba q)))
+  (if needs-auth?
+    (if (= (first q) "auth")
+      (if (= (second q) password)
+        ["auth accepted" true]
+        ["auth rejected" false])
+      ["auth needed" false])
+    [(condp = (first q)
+       "auth"    "auth unneeded"
+       "ping"    "pong"
+       "compact" (embedded/compact dba)
+       (embedded/query* dba q)) false]))
 
 (defn- write-response [#^BufferedWriter out resp]
   (.write out #^String (json/generate-string resp))
   (.write out "\n")
   (.flush out))
 
-(defn handler [dba #^Socket socket]
+(defn handler [dba #^Socket socket password]
   (try
     (with-open [socket socket
                 in     (BufferedReader. (InputStreamReader.  (.getInputStream socket)))
                 out    (BufferedWriter. (OutputStreamWriter. (.getOutputStream socket)))]
       (.setKeepAlive socket true)
-      (loop []
-        (if (try
-              (if-let [in-line (.readLine in)]
-                (let [query  (json/parse-string in-line)
-                      result (process-query dba query)]
-                  (write-response out [0 result])
-                  true))
-              (catch Exception e
-                (write-response out
-                  (if (or (raised? e) (instance? JsonParseException e))
-                    [1 (.getMessage e)]
-                    [2 (stacktrace/pst-str e)]))
-                true))
-            (recur))))
+      (loop [needs-auth? (? password)]
+        (let [got-auth?
+                (try
+                  (if-let [in-line (.readLine in)]
+                    (let [query              (json/parse-string in-line)
+                          [result got-auth?] (process-query dba query needs-auth? password)]
+                      (write-response out
+                        [(if (or (not needs-auth?) got-auth?) 0 1) result])
+                      got-auth?))
+                  (catch Exception e
+                    (write-response out
+                      (if (or (raised? e) (instance? JsonParseException e))
+                        [1 (.getMessage e)]
+                        [2 (stacktrace/pst-str e)]))
+                    false))]
+            (when-not (nil? got-auth?)
+              (when (or (not needs-auth?) got-auth?)
+                (recur false))))))
     (catch Exception e
       (stacktrace/pst-on System/err false e)
       (.println System/err))))
 
-(defn run [db-path ephemeral port addr threads]
+(defn run [db-path ephemeral port addr threads password]
   (let [inet          (InetAddress/getByName addr)
         server-socket (ServerSocket. port 10000 inet)
         pool          (thread-pool/init threads)
@@ -64,7 +75,7 @@
     (flush)
     (loop []
       (let [socket (doto (.accept server-socket))]
-        (thread-pool/submit pool #(handler dba socket)))
+        (thread-pool/submit pool #(handler dba socket password)))
       (recur))))
 
 (defn- print-help []
@@ -81,7 +92,7 @@
 
 (defn -main [& args]
   (let [args-array (into-array String args)
-        opt-parser (OptionParser. "f:ep:a:t:h")
+        opt-parser (OptionParser. "f:ep:a:t:x:h")
         opt-set    (.parse opt-parser args-array)]
     (cond
       (not-any? #(.has opt-set #^String %) ["f" "e" "p" "a" "t" "h"])
@@ -100,5 +111,6 @@
               ephemeral (.has opt-set "e")
               port      (or (parse-int (.valueOf opt-set "p")) 3400)
               addr      (or (.valueOf opt-set "a") "127.0.0.1")
-              threads   (or (parse-int (.valueOf opt-set "t")) 100)]
-          (run db-path ephemeral port addr threads)))))
+              threads   (or (parse-int (.valueOf opt-set "t")) 100)
+              password  (.valueOf opt-set "x")]
+          (run db-path ephemeral port addr threads password)))))
