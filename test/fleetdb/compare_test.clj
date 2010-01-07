@@ -19,6 +19,9 @@
   (assert= -1 (c nil 3))
   (assert= 1  (c 3   nil)))
 
+(deftest "booleans"
+  (assert= -1 (c false true)))
+
 (deftest "numbers"
   (assert= 0  (c 3 3))
   (assert= -1 (c 3 5))

@@ -35,6 +35,8 @@ public class Compare {
       return -1;
     } else if (b == null) {
       return 1;
+    } else if (a instanceof Boolean) {
+      return ((Boolean) a).compareTo((Boolean) b);
     } else if (a instanceof Number) {
       return Numbers.compare((Number) a, (Number) b);
     } else if (a instanceof String) {
