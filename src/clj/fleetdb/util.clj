@@ -1,5 +1,6 @@
 (ns fleetdb.util
-  (:require (clojure.contrib [def :as def])))
+  (:require (clojure.contrib [def :as def]))
+  (:import  (fleetdb FleetDBException)))
 
 (def/defalias def- def/defvar-)
 (def/defalias defmacro- def/defmacro-)
@@ -44,21 +45,11 @@
 (defn boolean? [x]
   (instance? Boolean x))
 
-(defn- raise-excp [#^String msg]
-  (proxy [Exception] [msg]
-    (toString [] msg)))
-
-(def raise-excp-class
-  (class (raise-excp "")))
-
 (defn raise [& msg-elems]
-  (throw (raise-excp (apply str msg-elems))))
+  (throw (FleetDBException. (apply str msg-elems))))
 
 (defmacro rassert [test & msg-elems]
   `(if-not ~test (raise ~@msg-elems)))
-
-(defn raised? [e]
-  (= (class e) raise-excp-class))
 
 (defn update [m k f & args]
   (assoc m k (apply f (get m k) args)))

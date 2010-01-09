@@ -9,6 +9,7 @@
             (java.io BufferedWriter OutputStreamWriter
                      BufferedReader InputStreamReader)
             (org.codehaus.jackson JsonParseException)
+            (fleetdb FleetDBException)
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
@@ -31,6 +32,10 @@
   (.write out "\n")
   (.flush out))
 
+(defn- recognized-exception? [#^Exception e]
+  (or (instance? FleetDBException e)
+      (instance? JsonParseException e)))
+
 (defn handler [dba #^Socket socket password]
   (try
     (with-open [socket socket
@@ -48,7 +53,7 @@
                       got-auth?))
                   (catch Exception e
                     (write-response out
-                      (if (or (raised? e) (instance? JsonParseException e))
+                      (if (recognized-exception? e)
                         [1 (.getMessage e)]
                         [2 (stacktrace/pst-str e)]))
                     false))]

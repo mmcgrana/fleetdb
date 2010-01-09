@@ -84,6 +84,11 @@
     (assert-not-fn set? (core/query db2-1
                           ["select" "elems" {"where" ["=" "lt" "d"]}]))))
 
+(deftest "select: raise on mixed attr types"
+  (let [db1-1 (first (core/query db1 ["insert" "elems" {"id" 7 "lt" 3}]))]
+    (assert-throws #"Cannot compare"
+      (core/query db1-1 ["select" "elems" {"order" ["lt" "asc"]}]))))
+
 (deftest "explain: select, count, update, delete"
   (let [coll      "elems"
         find-opts {"where" ["=" "id" 3]}

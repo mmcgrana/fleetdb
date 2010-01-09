@@ -41,7 +41,7 @@
   (assert= 4 (c :foo :bar)))
 
 (deftest "non-matching elems"
-  (assert-throws #"cannot be cast"
+  (assert-throws #"Cannot compare"
     (c 1 :one)))
 
 (deftest "vectors"
@@ -54,5 +54,5 @@
 (deftest "non-matching vectors"
   (assert-throws #"Cannot compare"
     (c [1 2] [1]))
-  (assert-throws #"cannot be cast"
+  (assert-throws #"Cannot compare"
     (c [1] [:one])))
