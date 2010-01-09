@@ -56,12 +56,12 @@
 (defn- lint-order-comp [order-comp]
   (lint vector? order-comp "order component not a vector")
   (lint #(= 2 (count %)) order-comp "order component should have 2 elements")
-  (lint-attr (first order-comp))
-  (lint-dir (second order-comp)))
+  (lint-attr (nth order-comp 0))
+  (lint-dir  (nth order-comp 1)))
 
 (defn- lint-order [order]
   (lint vector? order "order not a vector")
-  (if (attr? (first order))
+  (if (attr? (nth order 0))
     (lint-order-comp order)
     (domap lint-order-comp order)))
 
@@ -71,7 +71,7 @@
 
 (defn- lint-where [where]
   (lint vector? where "where not a vector")
-  (let [op (first where)]
+  (let [op (nth where 0)]
     (cond
        (sing-ops op)
          (do
@@ -132,27 +132,29 @@
     (attr?   ispec) :ok
     (vector? ispec)
       (doseq [ispec-comp ispec]
+        ;
         (cond
           (attr?   ispec-comp) :ok
           (vector? ispec-comp)
-            (lint #(= 2 (count %)) ispec-comp "index spec component vector must have 2 elements")
-            (lint-attr (first ispec-comp))
-            (lint-dir  (second ispec-comp)))
+            (do
+              (lint #(= 2 (count %)) ispec-comp "index spec component vector must have 2 elements")
+              (lint-attr (nth ispec-comp 0))
+              (lint-dir  (nth ispec-comp 1)))
           :else
-            (fail "index spec component must be a string or vector" ispec-comp))
+            (fail "index spec component must be a string or vector" ispec-comp)))
     :else
       (fail "index spec must be a string or vector" ispec)))
 
-(defn lint-num-args [n q]
+(defn lint-num-args [q n]
   (if (integer? n)
     (lint #(= n (dec (count %))) q
-          (str (first q) " takes " n " arguments"))
+          (str (nth q 0) " takes " n " arguments"))
     (lint #(n (dec (count %))) q
-          (str (first q) " takes "
+          (str (nth q 0) " takes "
                (first n) " or " (second n) " arguments"))))
 
 (defn- lint-insert [q]
-  (lint-num-args 2 q)
+  (lint-num-args q 2)
   (let [[_ coll records] q]
     (lint-coll coll)
     (cond
@@ -164,7 +166,7 @@
         (fail "not recognized as record or records" records))))
 
 (defn- lint-get [q]
-  (lint-num-args 2 q)
+  (lint-num-args q 2)
   (let [[_ coll vals] q]
     (lint-coll coll)
     (if (vector? vals)
@@ -172,26 +174,26 @@
       (lint-id vals))))
 
 (defn- lint-select [q]
-  (lint-num-args #{1 2} q)
+  (lint-num-args q #{1 2})
   (let [[_ coll find-opts] q]
     (lint-coll coll)
     (lint-find-opts find-opts true)))
 
 (defn- lint-count [q]
-  (lint-num-args #{1 2} q)
+  (lint-num-args q #{1 2})
   (let [[_ coll find-opts] q]
     (lint-coll coll)
     (lint-find-opts find-opts false)))
 
 (defn- lint-update [q]
-  (lint-num-args #{2 3} q)
+  (lint-num-args q #{2 3})
   (let [[_ coll update-spec find-opts] q]
     (lint-coll coll)
     (lint-update-spec update-spec)
     (lint-find-opts find-opts false)))
 
 (defn- lint-delete [q]
-  (lint-num-args #{1 2} q)
+  (lint-num-args q #{1 2})
   (let [[_ coll find-opts] q]
     (lint-coll coll)
     (lint-find-opts find-opts false)))
@@ -199,57 +201,62 @@
 (declare lint-query)
 
 (defn- lint-explain [q]
-  (lint-num-args 1 q)
-  (lint-query (second q)))
+  (lint-num-args q 1)
+  (lint-query (nth q 1)))
 
 (defn- lint-list-collections [q]
-  (lint-num-args 0 q))
+  (lint-num-args q 0))
+
+(defn- lint-drop-collection [q]
+  (lint-num-args q 1)
+  (lint-coll (nth q 1)))
 
 (defn- lint-create-index [q]
-  (lint-num-args 2 q)
-  (lint-ispec (second q)))
+  (lint-num-args q 2)
+  (lint-coll (nth q 1))
+  (lint-ispec (nth q 2)))
 
 (defn- lint-drop-index [q]
   (lint-create-index q))
 
 (defn- lint-list-indexes [q]
-  (lint-num-args 1 q)
-  (lint-coll (second q)))
+  (lint-num-args q 1)
+  (lint-coll (nth q 1)))
 
 (declare lint-query lint-read-query lint-write-query)
 
 (defn- lint-multi-read [q]
-  (lint-num-args 1 q)
-  (let [reads (second q)]
+  (lint-num-args q 1)
+  (let [reads (nth q 1)]
     (lint vector? reads "read queries not given in a vector")
     (domap lint-read-query reads)))
 
 (defn- lint-multi-write [q]
-  (lint-num-args 1 q)
-  (let [writes (second q)]
+  (lint-num-args q 1)
+  (let [writes (nth q 1)]
     (lint vector? writes "write queries not given in a vector")
     (domap lint-query writes)))
 
 (defn- lint-checked-write [q]
-  (lint-num-args 3 q)
+  (lint-num-args q 3)
   (let [[_ read-query expected-result write-query] q]
     (lint-read-query read-query)
     (lint-write-query write-query)))
 
 (defn- lint-auth [q]
-  (lint-num-args 1 q)
-  (lint string? (second q) "password not a string"))
+  (lint-num-args q 1)
+  (lint string? (nth q 1) "password not a string"))
 
 (defn- lint-ping [q]
-  (lint-num-args 0 q))
+  (lint-num-args q 0))
 
 (defn- lint-compact [q]
-  (lint-num-args 0 q))
+  (lint-num-args q 0))
 
 (defn lint-query [q]
   (if-not (vector? q)
     (fail "query not a vector" q)
-    (condp = (first q)
+    (condp = (nth q 0)
       "insert"           (lint-insert           q)
       "select"           (lint-select           q)
       "count"            (lint-count            q)
@@ -257,6 +264,7 @@
       "delete"           (lint-delete           q)
       "explain"          (lint-explain          q)
       "list-collections" (lint-list-collections q)
+      "drop-collection"  (lint-drop-collection  q)
       "create-index"     (lint-create-index     q)
       "drop-index"       (lint-drop-index       q)
       "list-indexes"     (lint-list-indexes     q)
@@ -266,16 +274,16 @@
       "auth"             (lint-auth             q)
       "ping"             (lint-ping             q)
       "compact"          (lint-compact          q)
-      (fail "unrecognized query type" (first q)))))
+      (fail "unrecognized query type" (nth q 0)))))
 
 (defn- lint-read-query [q]
   (lint types/read-queries
-        (first q)
+        (nth q 0)
         "query not a read query")
   (lint-query q))
 
 (defn- lint-write-query [q]
   (lint types/write-queries
-        (first q)
+        (nth q 0)
         "query not a write query")
   (lint-query q))

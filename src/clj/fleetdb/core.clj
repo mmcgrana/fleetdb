@@ -509,6 +509,11 @@
                    db))
       (list)))
 
+(defmethod query* "drop-collection" [db [_ coll]]
+  (if (get db coll)
+    [(dissoc db coll) 1]
+    [db 0]))
+
 (defmethod query* "create-index" [db [_ coll ispec]]
   (if (get-in db [coll :imap ispec])
     [db 0]

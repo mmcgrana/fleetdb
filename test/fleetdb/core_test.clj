@@ -342,6 +342,14 @@
   (let [[db1-1 _] (core/query db1 ["create-index" "foos" "name"])]
     (assert-set= ["elems" "foos"] (core/query db1-1 ["list-collections"]))))
 
+(deftest "drop-collection"
+  (let [[db1-1 r1] (core/query db1  ["drop-collection" "elems"])]
+    (assert= 1 r1)
+    (assert= [] (core/query db1-1 ["list-collections"]))
+    (assert= [] (core/query db1-1 ["list-indexes" "elems"]))
+    (let [[db1-2 r2] (core/query db1-1 ["drop-collection" "elems"])]
+      (assert= 0 r2))))
+
 (deftest "create-/drop-index"
   (let [[db1-1 r1 ] (core/query db1   ["create-index" "elems" "name"])
         [_     r1d] (core/query db1-1 ["create-index" "elems" "name"])
