@@ -5,7 +5,8 @@
                      [fair-lock :as fair-lock] [file :as file])
             [clj-json :as json])
   (:import  (java.util ArrayList)
-            (java.io FileReader BufferedReader FileWriter BufferedWriter)))
+            (java.io FileReader BufferedReader FileWriter BufferedWriter
+                     File RandomAccessFile)))
 
 (defn- dba? [dba]
   (? (:write-lock (meta dba))))
@@ -22,7 +23,22 @@
 (defn- replay-query [db q]
   (first (core/query* db q)))
 
+(defn- check-log [read-path]
+  (let [f      (File. read-path)
+        raf    (RandomAccessFile. f "rw")
+        last-i (dec (.length f))]
+    (.seek raf last-i)
+    (when-not (= 10 (.read raf))
+      (loop [i last-i]
+        (.seek raf i)
+        (if (= 10 (.read raf))
+          (let [truncate-to (inc i)]
+            (.setLength raf truncate-to)
+            truncate-to)
+          (recur (dec i)))))))
+
 (defn- read-db [read-path]
+  (check-log read-path)
   (let [reader  (BufferedReader. (FileReader. #^String read-path))
         queries (json/parsed-seq reader)
         empty   (core/init)]
@@ -42,18 +58,17 @@
 
 (defn- write-queries [#^BufferedWriter writer queries]
   (doseq [q queries]
+    (write-query writer)
     (.write writer #^String (json/generate-string q))
     (.flush writer)))
 
 (defn- write-db [write-path db]
   (let [writer (new-writer write-path)]
     (doseq [coll (core/query* db ["list-collections"])]
-      (write-queries writer
-        (for [chunk (partition-all 100 (core/query* db ["select" coll]))]
-          ["insert" coll chunk]))
-      (write-queries writer
-        (for [ispec (core/query* db ["list-indexes" coll])]
-          ["create-index" coll ispec])))
+      (doseq [chunk (partition-all 100 (core/query* db ["select" coll]))]
+          (write-query writer ["insert" coll chunk]))
+      (doseq [ispec (core/query* db ["list-indexes" coll])]
+          (write-query writer ["create-index" coll ispec])))
     (close-writer writer)))
 
 (defn- init* [db & [other-meta]]

@@ -1,6 +1,7 @@
 (ns fleetdb.embedded-test
   (:require (fleetdb [embedded :as embedded] [file :as file]))
-  (:use (clj-unit core) (fleetdb util)))
+  (:use (clj-unit core) (fleetdb util))
+  (:import (java.io File RandomAccessFile)))
 
 (defmacro- with-dba [[name dba-form] & body]
   `(let [~name ~dba-form]
@@ -85,3 +86,12 @@
         (assert-fn #(< % pre-compact-size) post-compact-size)))
   (with-dba [dba-1 (embedded/load-persistent log-path)]
     (assert= 51 (embedded/query dba-1 ["count" "elems"])))))
+
+(deftest "persistent: check"
+  (file/rm log-path)
+  (with-dba [dba-0 (embedded/init-persistent log-path)]
+    (dotimes [i 3]
+      (embedded/query dba-0 ["insert" "elems" {"id" (+ 3 i)}])))
+  (.setLength (RandomAccessFile. (File. log-path) "rw") 70)
+  (with-dba [dba-1 (embedded/load-persistent log-path)]
+    (assert= 2 (embedded/query dba-1 ["count" "elems"]))))
