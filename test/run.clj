@@ -1,10 +1,12 @@
 (use 'clj-unit.core)
 
-(require 'fleetdb.server)
+(def base-tests ['fleetdb.compare-test
+                 'fleetdb.core-test
+                 'fleetdb.embedded-test])
 
-(require-and-run-tests
-  'fleetdb.compare-test
-  'fleetdb.core-test
-  'fleetdb.embedded-test
-  'fleetdb.server-test
-)
+(def server-test 'fleetdb.server-test)
+
+(apply require-and-run-tests
+  (if (= (first *command-line-args*) "--no-server")
+    base-tests
+    (conj base-tests server-test)))
