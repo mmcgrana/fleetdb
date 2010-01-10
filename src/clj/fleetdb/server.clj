@@ -25,7 +25,8 @@
        "auth"    "auth unneeded"
        "ping"    "pong"
        "compact" (embedded/compact dba)
-       (embedded/query* dba q)) false]))
+       (embedded/query* dba q))
+     false]))
 
 (defn- write-response [#^BufferedWriter out resp]
   (.write out #^String (json/generate-string resp))

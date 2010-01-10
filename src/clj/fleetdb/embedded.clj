@@ -110,21 +110,22 @@
 
 (defn compact [dba]
   (rassert (persistent? dba) "cannot compact ephemeral database")
-  (rassert (not (compacting? dba)) "already compacting database")
   (fair-lock/fair-locking (:write-lock (meta dba))
-    (let [tmp-path    (file/tmp-path "/tmp" "compact")
-          db-at-start @dba]
-      (alter-meta! dba assoc :write-buf (ArrayList.))
-      (spawn
-        (write-db tmp-path db-at-start)
-        (fair-lock/fair-locking (:write-lock (meta dba))
-          (let [writer (new-writer tmp-path)]
-            (write-queries writer (:write-buf (meta dba)))
-            (file/mv tmp-path (:write-path (meta dba)))
-            (close-writer (:writer (meta dba)))
-            (alter-meta! dba dissoc :write-buf)
-            (alter-meta! dba assoc  :writer writer))))
-      true)))
+    (if (compacting? dba)
+      false
+      (let [tmp-path    (file/tmp-path "/tmp" "compact")
+            db-at-start @dba]
+        (alter-meta! dba assoc :write-buf (ArrayList.))
+        (spawn
+          (write-db tmp-path db-at-start)
+          (fair-lock/fair-locking (:write-lock (meta dba))
+            (let [writer (new-writer tmp-path)]
+              (write-queries writer (:write-buf (meta dba)))
+              (file/mv tmp-path (:write-path (meta dba)))
+              (close-writer (:writer (meta dba)))
+              (alter-meta! dba dissoc :write-buf)
+              (alter-meta! dba assoc  :writer writer))))
+        true))))
 
 (defn query* [dba q]
   (if (types/write-queries (first q))
