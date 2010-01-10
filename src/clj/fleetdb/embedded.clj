@@ -24,7 +24,7 @@
   (first (core/query* db q)))
 
 (defn- check-log [read-path]
-  (let [f      (File. read-path)
+  (let [f      (File. #^String read-path)
         raf    (RandomAccessFile. f "rw")
         last-i (dec (.length f))]
     (.seek raf last-i)
@@ -46,7 +46,7 @@
 
 (defn- new-writer [write-path]
   (let [appending (file/exist? write-path)]
-    (BufferedWriter. (FileWriter. #^String write-path appending))))
+    (BufferedWriter. (FileWriter. #^String write-path #^Boolean appending))))
 
 (defn- close-writer [#^BufferedWriter writer]
   (.close writer))
