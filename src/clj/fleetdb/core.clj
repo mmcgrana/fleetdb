@@ -421,11 +421,14 @@
           map? (do (assert (= indexed record))
                    nil))))))
 
+(defn- empty-index [ispec]
+  (sorted-map-by (attr-compare ispec)))
+
 (defn- index-build [records ispec]
   (let [on-fn (ispec-on-fn ispec)]
     (reduce
       (fn [i r] (index-insert i on-fn r))
-      (sorted-map-by (attr-compare ispec))
+      (empty-index ispec)
       records)))
 
 (defn- imap-apply [imap apply-fn]
@@ -493,10 +496,19 @@
          (imap-update int-imap old-record new-record)]))))
 
 (defmethod query* "delete" [db [_ coll opts]]
-  (db-apply db coll (find-records db coll opts)
-    (fn [[int-rmap int-imap] old-record]
-      [(rmap-delete int-rmap old-record)
-       (imap-delete int-imap old-record)])))
+  (if (empty? opts)
+    [(assoc db coll
+       {:rmap {}
+        :imap (reduce
+                (fn [int-imap ispec]
+                  (assoc int-imap ispec (empty-index ispec)))
+                {}
+                (coll-ispecs db coll))})
+     (count (get-in db [coll :rmap]))]
+    (db-apply db coll (find-records db coll opts)
+      (fn [[int-rmap int-imap] old-record]
+        [(rmap-delete int-rmap old-record)
+         (imap-delete int-imap old-record)]))))
 
 (defmethod query* "explain" [db [_ [query-type coll e3 e4]]]
   (find-plan coll (coll-ispecs db coll)

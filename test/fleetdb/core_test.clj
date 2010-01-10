@@ -289,6 +289,17 @@
     (assert-set= [r1 r3 r5 r6]
                  (core/query db1-1 ["select" "elems"]))))
 
+(deftest "delete: all"
+  (let [[db2-1 c] (core/query db2 ["delete" "elems"])]
+    (assert= 6 c)
+    (assert= (list) (core/query db2-1 ["select" "elems"]))
+    (assert-set= ["lt" ["num" "tp"]]
+                 (core/query db2-1 ["list-indexes" "elems"]))
+    (let [[db2-2 _] (core/query db2-1 ["insert" "elems" {"id" "1" "lt" "a"}])]
+      (assert= ["a"]
+               (core/query db2-2 ["select" "elems"
+                                   {"where" [">=" "lt" "a"] "only" "lt"}])))))
+
 (deftest "multi-read"
   (assert= [1 [r4 r2]]
            (core/query db1
