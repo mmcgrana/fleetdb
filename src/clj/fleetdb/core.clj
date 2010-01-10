@@ -462,7 +462,10 @@
   (find-records db coll opts))
 
 (defmethod query* "count" [db [_ coll opts]]
-  (count (find-records db coll opts)))
+  (count
+    (if (empty? opts)
+      (get-in db [coll :rmap])
+      (find-records db coll opts))))
 
 (defn- db-apply [db coll records apply-fn]
   (let [old-coll (get db coll)

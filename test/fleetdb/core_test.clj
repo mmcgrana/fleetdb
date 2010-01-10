@@ -232,7 +232,7 @@
 (deftest "count: empty"
   (assert= 0 (core/query db1 ["count" "foos"])))
 
-(deftest "count: nonempty"
+(deftest "count: all"
   (assert= 6 (core/query db1 ["count" "elems"])))
 
 (deftest "count: qualified"
