@@ -98,7 +98,7 @@
            (lint #(= 3 (count %)) where "in clause has 2 arguments")
            (let [[_ attr vals] where]
              (lint-attr attr)
-             (lint vector? vals "vals for in must be in a vector")
+             (lint sequential? vals "vals for in must be in a sequence")
              (domap lint-val vals)))
        :else
          (fail "unrecognized where operation" op))))
