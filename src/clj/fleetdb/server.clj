@@ -65,24 +65,35 @@
       (stacktrace/pst-on System/err false e)
       (.println System/err))))
 
+(defn- report-loading-start []
+  (print "Loading database file...")
+  (flush))
+
+(defn- report-loading-end []
+  (println "done"))
+
+(defn- report-ready [port]
+  (println "FleetDB listening on port" port))
+
 (defn run [db-path ephemeral port addr threads password]
   (let [inet          (InetAddress/getByName addr)
         server-socket (ServerSocket. port 10000 inet)
         pool          (thread-pool/init threads)
-        loading       (and db-path (file/exist? db-path))
-        dba           (if ephemeral
-                        (if loading
-                          (embedded/load-ephemeral db-path)
-                          (embedded/init-ephemeral))
-                        (if loading
-                          (embedded/load-persistent db-path)
-                          (embedded/init-persistent db-path)))]
-    (printf "FleetDB listening on port %d\n" port)
-    (flush)
-    (loop []
-      (let [socket (doto (.accept server-socket))]
-        (thread-pool/submit pool #(handler dba socket password)))
-      (recur))))
+        loading       (and db-path (file/exist? db-path))]
+    (if loading (report-loading-start))
+    (let [dba (if ephemeral
+                (if loading
+                  (embedded/load-ephemeral db-path)
+                  (embedded/init-ephemeral))
+                (if loading
+                  (embedded/load-persistent db-path)
+                  (embedded/init-persistent db-path)))]
+      (if loading (report-loading-end))
+      (report-ready port)
+      (loop []
+        (let [socket (doto (.accept server-socket))]
+          (thread-pool/submit pool #(handler dba socket password)))
+        (recur)))))
 
 (defn- print-help []
   (println "FleetDB Server                                             ")
