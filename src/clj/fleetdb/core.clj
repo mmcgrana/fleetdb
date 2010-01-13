@@ -237,7 +237,7 @@
 (defn- only-plan [source only]
   (if only ["only" only source] source))
 
-(defn- find-plan [coll ispecs opts]
+(defn- make-plan [coll ispecs opts]
   (let [{where "where" order "order" offset "offset" limit "limit" only "only"} opts]
     (-> (where-order-plan coll ispecs where order)
       (offset-plan offset)
@@ -289,42 +289,71 @@
         (fn [record]
           (contains? aval-set (record attr))))))
 
-(defmulti- exec-plan (fn [db [plan-type _]] plan-type))
+(defmulti- find-plan
+  (fn [db [plan-type _]] plan-type))
 
-(defmethod exec-plan "filter" [db [_ where source]]
-  (filter (where-pred where) (exec-plan db source)))
+(defmulti- count-plan
+  (fn [db [plan-type _]] plan-type))
 
-(defmethod exec-plan "sort" [db [_ order source]]
-  (sort (record-compare order) (exec-plan db source)))
+(defmethod find-plan  "filter" [db [_ where source]]
+  (filter (where-pred where) (find-plan db source)))
 
-(defmethod exec-plan "offset" [db [_ offset source]]
-  (drop offset (exec-plan db source)))
+(defmethod count-plan "filter" [db plan]
+  (count (find-plan db plan)))
 
-(defmethod exec-plan "limit" [db [_ limit source]]
-  (take limit (exec-plan db source)))
+(defmethod find-plan  "sort" [db [_ order source]]
+  (sort (record-compare order) (find-plan db source)))
 
-(defmethod exec-plan "only" [db [_ only source]]
+(defmethod count-plan "sort" [db [_ order source]]
+  (count-plan db source))
+
+(defmethod find-plan  "offset" [db [_ offset source]]
+  (drop offset (find-plan db source)))
+
+(defmethod count-plan "offset" [db [_ offset source]]
+  (max 0 (- (count-plan db source) offset)))
+
+(defmethod find-plan  "limit" [db [_ limit source]]
+  (take limit (find-plan db source)))
+
+(defmethod count-plan "limit" [db [_ limit source]]
+  (min limit (count-plan db source)))
+
+(defmethod find-plan  "only" [db [_ only source]]
   (condv only
     vector?
-      (map (fn [r] (map #(r %) only)) (exec-plan db source))
+      (map (fn [r] (map #(r %) only)) (find-plan db source))
     string?
-      (map (fn [r] (r only)) (exec-plan db source))))
+      (map (fn [r] (r only)) (find-plan db source))))
 
-(defmethod exec-plan "union" [db [_ order sources]]
+(defmethod find-plan  "union" [db [_ order sources]]
   (uniq
     (sort (record-compare (or order ["id" "asc"]))
-          (apply concat (map #(exec-plan db %) sources)))))
+          (apply concat (map #(find-plan db %) sources)))))
 
-(defmethod exec-plan "collection-lookup" [db [_ [coll id]]]
+(defmethod count-plan "union" [db plan]
+  (count (find-plan db plan)))
+
+(defmethod find-plan  "collection-lookup" [db [_ [coll id]]]
   (if-let [record (get-in db [coll :rmap id])]
     (list record)))
 
-(defmethod exec-plan "collection-multilookup" [db [_ [coll ids]]]
+(defmethod count-plan "collection-lookup" [db [_ [coll id]]]
+  (if (get-in db [coll :rmap id]) 1 0))
+
+(defmethod find-plan  "collection-multilookup" [db [_ [coll ids]]]
   (if-let [rmap (get-in db [coll :rmap])]
     (compact (map #(rmap %) ids))))
 
-(defmethod exec-plan "collection-scan" [db [_ coll]]
+(defmethod count-plan "collection-multilookup" [db [_ [coll ids]]]
+  (let [rmap (get-in db [coll :rmap])]
+    (reduce (fn [c id] (if (contains? rmap id) (inc c) c)) 0 ids)))
+
+(defmethod find-plan  "collection-scan" [db [_ coll]]
   (vals (get-in db [coll :rmap])))
+
+(defmethod count-plan "collection-scan" [db [_ coll]]
+  (count (get-in db [coll :rmap])))
 
 (defn- indexed-flatten1 [indexed]
   (cond (nil? indexed) nil
@@ -340,38 +369,50 @@
           (set? f) (concat f (indexed-flatten r))
           :single  (cons f (indexed-flatten r)))))))
 
-(defmethod exec-plan "index-lookup" [db [_ [coll ispec val]]]
-  (indexed-flatten1 (get-in db [coll :imap ispec val])))
+(defn- index-lookup [db [coll ispec val]]
+  (get-in db [coll :imap ispec val]))
 
-(defmethod exec-plan "index-range"
-  [db [_ [coll ispec sdir left-val left-inc right-val right-inc]]]
-    (let [#^Sorted index (get-in db [coll :imap ispec])
-          indexeds
-      (if (= sdir "left-right")
-        (let [base    (.seqFrom index left-val true)
-              base-l  (if (or left-inc (not= (key (first base)) left-val))
-                        base
-                        (rest base))
-              base-lr (if right-inc
-                        (take-while #(Compare/lte (key %) right-val) base-l)
-                        (take-while #(Compare/lt  (key %) right-val) base-l))]
-          (vals base-lr))
-        (let [base    (.seqFrom index right-val false)
-              base-r  (if (or right-inc (not= (key (first base)) right-val))
-                        base
-                        (rest base))
-              base-rl (if left-inc
-                        (take-while #(Compare/gte (key %) left-val) base-r)
-                        (take-while #(Compare/gt  (key %) left-val) base-r))]
-          (vals base-rl)))]
-      (indexed-flatten indexeds)))
+(defn- index-range [db [coll ispec sdir left-val left-inc right-val right-inc]]
+  (let [#^Sorted index (get-in db [coll :imap ispec])]
+    (if (= sdir "left-right")
+      (let [base    (.seqFrom index left-val true)
+            base-l  (if (or left-inc (not= (key (first base)) left-val))
+                      base
+                      (rest base))
+            base-lr (if right-inc
+                      (take-while #(Compare/lte (key %) right-val) base-l)
+                      (take-while #(Compare/lt  (key %) right-val) base-l))]
+        (vals base-lr))
+      (let [base    (.seqFrom index right-val false)
+            base-r  (if (or right-inc (not= (key (first base)) right-val))
+                      base
+                      (rest base))
+            base-rl (if left-inc
+                      (take-while #(Compare/gte (key %) left-val) base-r)
+                      (take-while #(Compare/gt  (key %) left-val) base-r))]
+        (vals base-rl)))))
+
+(defmethod find-plan  "index-lookup" [db [_ lookup]]
+  (indexed-flatten1 (index-lookup db lookup)))
+
+(defmethod count-plan "index-lookup" [db [_ lookup]]
+  (count (index-lookup db lookup)))
+
+(defmethod find-plan  "index-range" [db [_ range]]
+  (indexed-flatten (index-range db range)))
+
+(defmethod count-plan "index-range" [db [_ range]]
+  (reduce + (map count (index-range db range))))
 
 (defn- coll-ispecs [db coll]
   (keys (get-in db [coll :imap])))
 
 (defn- find-records [db coll opts]
-  (or (exec-plan db (find-plan coll (coll-ispecs db coll) opts))
+  (or (find-plan db (make-plan coll (coll-ispecs db coll) opts))
       (list)))
+
+(defn- count-records [db coll opts]
+  (count-plan db (make-plan coll (coll-ispecs db coll) opts)))
 
 
 ;; RMap and IMap manipulation
@@ -462,10 +503,7 @@
   (find-records db coll opts))
 
 (defmethod query* "count" [db [_ coll opts]]
-  (count
-    (if (empty? opts)
-      (get-in db [coll :rmap])
-      (find-records db coll opts))))
+  (count-records db coll opts))
 
 (defn- db-apply [db coll records apply-fn]
   (let [old-coll (get db coll)
@@ -514,7 +552,7 @@
          (imap-delete int-imap old-record)]))))
 
 (defmethod query* "explain" [db [_ [query-type coll e3 e4]]]
-  (find-plan coll (coll-ispecs db coll)
+  (make-plan coll (coll-ispecs db coll)
     (if (= "update" query-type) e4 e3)))
 
 (defmethod query* "list-collections" [db _]

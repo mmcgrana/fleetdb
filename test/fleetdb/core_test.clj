@@ -23,61 +23,57 @@
 
 (def- db2 (db-with "elems" records ["lt" ["num" "tp"]]))
 
-(deftest "select: no coll"
-  (assert= [] (core/query db1 ["select" "foos"])))
+(defn assert-find [select-result db coll & [select-opts]]
+  (let [select-assert (if (set? select-result) assert-set= assert=)]
+    (select-assert select-result
+                   (core/query db ["select" coll select-opts]))
+    (assert= (count select-result)
+             (core/query db ["count" coll (dissoc select-opts "only")]))))
 
-(deftest "select: full coll"
-  (assert-set= records (core/query db1 ["select" "elems"])))
+(deftest "find: no coll"
+  (assert-find [] db1 "foos"))
 
-(deftest "select: ad-hoc single attr sort"
-  (assert= [r1 r3 r2 r6 r4 r5]
-           (core/query db1 ["select" "elems" {"order" ["lt" "asc"]}])))
+(deftest "find: full coll"
+  (assert-find (set records) db1 "elems"))
 
-(deftest "select: ad-hoc non-abbreviated single attr sort"
-  (assert= [r1 r3 r2 r6 r4 r5]
-           (core/query db1 ["select" "elems" {"order" [["lt" "asc"]]}])))
+(deftest "find: ad-hoc single attr sort"
+  (assert-find [r1 r3 r2 r6 r4 r5] db1 "elems" {"order" ["lt" "asc"]}))
 
-(deftest "select: ad-hoc multi attr sort"
-  (assert= [r2 r3 r1 r5 r4 r6]
-           (core/query db1 ["select" "elems"
-                             {"order" [["tp" "asc"] ["num" "desc"]]}])))
+(deftest "find: ad-hoc non-abbreviated single attr sort"
+  (assert-find [r1 r3 r2 r6 r4 r5] db1 "elems" {"order" [["lt" "asc"]]}))
 
-(deftest "select: sort, offset, and limit"
-  (assert= [r2 r6 r4]
-           (core/query db1
-              ["select" "elems" {"order" ["lt" "asc"] "offset" 2 "limit" 3}])))
+(deftest "find: ad-hoc multi attr sort"
+  (assert-find [r2 r3 r1 r5 r4 r6]
+               db1 "elems" {"order" [["tp" "asc"] ["num" "desc"]]}))
 
-(deftest "select: by id"
-  (assert= [r4]
-           (core/query db1 ["select" "elems" {"where" ["=" "id" 4]}])))
+(deftest "find: sort, offset, and limit"
+  (assert-find [r2 r6 r4]
+               db1 "elems" {"order" ["lt" "asc"] "offset" 2 "limit" 3}))
 
-(deftest "select: by ids"
-  (assert-set= [r4 r2]
-                 (core/query db1 ["select" "elems" {"where" ["in" "id" [4 100 2]]}])))
+(deftest "find: by id"
+  (assert-find [r4] db1 "elems" {"where" ["=" "id" 4]}))
 
-(deftest "select: by simple ad-hoc pred"
-  (assert-set= [r4]
-                 (core/query db1 ["select" "elems" {"where" ["=" "lt" "e"]}])))
+(deftest "find: by ids"
+  (assert-find #{r4 r2} db1 "elems" {"where" ["in" "id" [4 100 2]]}))
 
-(deftest "select: by and predicate"
-  (assert-set= [r2 r3]
-               (core/query db1 ["select" "elems"
-                                 {"where" ["and" ["=" "tp" "a"] [">=" "num" 2]]}])))
+(deftest "find: by simple ad-hoc pred"
+  (assert-find [r4] db1 "elems" {"where" ["=" "lt" "e"]}))
 
-(deftest "select: by or predicate"
-  (assert= [r1 r3 r4]
-           (core/query db1 ["select" "elems"
-                             {"where" ["or" ["=" "lt" "a"] ["=" "num" 2]]}])))
+(deftest "find: by and predicate"
+  (assert-find #{r2 r3}
+               db1 "elems" {"where" ["and" ["=" "tp" "a"] [">=" "num" 2]]}))
 
-(deftest "select: only with array"
-  (assert= [["e"] ["c"]]
-           (core/query db1
-             ["select" "elems" {"where" ["in" "id" [4 2]] "only" ["lt"]}])))
+(deftest "find: by or predicate"
+  (assert-find #{r1 r3 r4}
+               db1 "elems" {"where" ["or" ["=" "lt" "a"] ["=" "num" 2]]}))
 
-(deftest "select: only with element"
-  (assert= ["e" "c"]
-           (core/query db1
-             ["select" "elems" {"where" ["in" "id" [4 2]] "only" "lt"}])))
+(deftest "find: only with array"
+  (assert-find #{["e"] ["c"]}
+               db1 "elems" {"where" ["in" "id" [4 2]] "only" ["lt"]}))
+
+(deftest "find: only with element"
+  (assert-find #{"e" "c"}
+               db1 "elems" {"where" ["in" "id" [4 2]] "only" "lt"}))
 
 (deftest "select: index lookup seqing"
   (let [db2-1 (first (core/query db2 ["insert" "elems" {"id" 7 "lt" "d"}]))]
@@ -100,7 +96,7 @@
       (assert= ["collection-lookup" ["elems" 3]]
                (core/query db1 ["explain" query])))))
 
-(defn assert-find [opts plan1-expected & [plan2-expected]]
+(defn assert-plan [opts plan1-expected & [plan2-expected]]
   (let [plan1-actual (core/query db1 ["explain" ["select" "elems" opts]])
         plan2-actual (core/query db2 ["explain" ["select" "elems" opts]])]
     (assert= plan1-expected plan1-actual)
@@ -111,26 +107,26 @@
         (assert= res1-actual res2-actual)
         (assert-set= res1-actual res2-actual)))))
 
-(deftest "find: no conditions"
-  (assert-find nil
+(deftest "plan: no conditions"
+  (assert-plan nil
     ["collection-scan" "elems"]))
 
-(deftest "find: one id"
-  (assert-find {"where" ["=" "id" 2]}
+(deftest "plan: one id"
+  (assert-plan {"where" ["=" "id" 2]}
     ["collection-lookup" ["elems" 2]]))
 
-(deftest "find: many ids"
-  (assert-find {"where" ["in" "id" [2 3 4]]}
+(deftest "plan: many ids"
+  (assert-plan {"where" ["in" "id" [2 3 4]]}
     ["collection-multilookup" ["elems" [2 3 4]]]))
 
-(deftest "find: many ids with order"
-  (assert-find
+(deftest "plan: many ids with order"
+  (assert-plan
     {"where" ["in" "id" [2 3 4]] "order" ["lt" "asc"]}
     ["sort" ["lt" "asc"]
       ["collection-multilookup" ["elems" [2 3 4]]]]))
 
-(deftest "find: many opts"
-  (assert-find
+(deftest "plan: many opts"
+  (assert-plan
     {"where" ["=" "tp" "a"] "order" ["lt" "asc"] "limit" 3 "offset" 6 "only" ["id" "lt"]}
     ["only" ["id" "lt"]
        ["limit" 3
@@ -144,8 +140,8 @@
            ["filter" ["=" "tp" "a"]
              ["index-range" ["elems" "lt" "left-right" :neg-inf true :pos-inf true]]]]]]))
 
-(deftest "find: union"
-   (assert-find {"where" ["or" ["=" "lt" "a"] ["=" "num" 2]] "order" ["tp" "asc"]}
+(deftest "plan: union"
+   (assert-plan {"where" ["or" ["=" "lt" "a"] ["=" "num" 2]] "order" ["tp" "asc"]}
      ["union" ["tp" "asc"]
        [["sort" ["tp" "asc"]
           ["filter" ["=" "lt" "a"]
@@ -158,85 +154,76 @@
           ["index-lookup" ["elems" "lt" "a"]]]
         ["index-range" ["elems" ["num" "tp"] "left-right" [2 :neg-inf] true [2 :pos-inf] true]]]]))
 
-(deftest "find: attr equality"
-  (assert-find {"where" ["=" "lt" "a"]}
+(deftest "plan: attr equality"
+  (assert-plan {"where" ["=" "lt" "a"]}
     ["filter" ["=" "lt" "a"]
       ["collection-scan" "elems"]]
     ["index-lookup" ["elems" "lt" "a"]]))
 
-(deftest "find: attr range"
-  (assert-find {"where" [">" "lt" "c"]}
+(deftest "plan: attr range"
+  (assert-plan {"where" [">" "lt" "c"]}
     ["filter" [">" "lt" "c"]
       ["collection-scan" "elems"]]
     ["index-range" ["elems" "lt" "left-right" "c" false :pos-inf true]]))
 
-(deftest "find: attr equality when index obscured"
-  (assert-find {"where" ["=" "tp" "a"]}
+(deftest "plan: attr equality when index obscured"
+  (assert-plan {"where" ["=" "tp" "a"]}
     ["filter" ["=" "tp" "a"]
       ["collection-scan" "elems"]]))
 
-(deftest "find: multi-attr equality"
-  (assert-find {"where" ["and" ["=" "num" 2] ["=" "tp" "a"]]}
+(deftest "plan: multi-attr equality"
+  (assert-plan {"where" ["and" ["=" "num" 2] ["=" "tp" "a"]]}
     ["filter" ["and" ["=" "num" 2] ["=" "tp" "a"]]
       ["collection-scan" "elems"]]
     ["index-lookup" ["elems" ["num" "tp"] [2 "a"]]]))
 
-(deftest "find: multi-attr range"
-  (assert-find {"where" ["and" ["=" "num" 2] [">=" "tp" "a"]]}
+(deftest "plan: multi-attr range"
+  (assert-plan {"where" ["and" ["=" "num" 2] [">=" "tp" "a"]]}
     ["filter" ["and" ["=" "num" 2] [">=" "tp" "a"]]
       ["collection-scan" "elems"]]
     ["index-range" ["elems" ["num" "tp"]
                    "left-right" [2 "a"] true [2 :pos-inf] true]]))
 
-(deftest "find: index order left right"
-  (assert-find {"order" ["lt" "asc"]}
+(deftest "plan: index order left right"
+  (assert-plan {"order" ["lt" "asc"]}
     ["sort" ["lt" "asc"]
       ["collection-scan" "elems"]]
     ["index-range" ["elems" "lt" "left-right" :neg-inf true :pos-inf true]]))
 
-(deftest "find: index order right left"
-  (assert-find {"order" ["lt" "desc"]}
+(deftest "plan: index order right left"
+  (assert-plan {"order" ["lt" "desc"]}
     ["sort" ["lt" "desc"]
       ["collection-scan" "elems"]]
     ["index-range" ["elems" "lt" "right-left" :neg-inf true :pos-inf true]]))
 
-(deftest "find: index order trailing attrs"
-  (assert-find {"where" ["=" "tp" "a"] "order" ["num" "desc"]}
+(deftest "plan: index order trailing attrs"
+  (assert-plan {"where" ["=" "tp" "a"] "order" ["num" "desc"]}
     ["sort" ["num" "desc"]
       ["filter" ["=" "tp" "a"]
         ["collection-scan" "elems"]]]
     ["filter" ["=" "tp" "a"]
       ["index-range" ["elems" ["num" "tp"] "right-left" [:neg-inf :neg-inf] true [:pos-inf :pos-inf] true]]]))
 
-(deftest "find: index lookup and order"
-  (assert-find {"where" ["=" "num" 2] "order" ["tp" "desc"]}
+(deftest "plan: index lookup and order"
+  (assert-plan {"where" ["=" "num" 2] "order" ["tp" "desc"]}
     ["sort" ["tp" "desc"]
       ["filter" ["=" "num" 2]
         ["collection-scan" "elems"]]]
     ["index-range" ["elems" ["num" "tp"] "right-left" [2 :neg-inf] true [2 :pos-inf] true]]))
 
-(deftest "find: index lookup with remnant filter"
-  (assert-find {"where" ["and" [">" "lt" "b"] ["=" "tp" "a"]]}
+(deftest "plan: index lookup with remnant filter"
+  (assert-plan {"where" ["and" [">" "lt" "b"] ["=" "tp" "a"]]}
     ["filter" ["and" [">" "lt" "b"] ["=" "tp" "a"]]
       ["collection-scan" "elems"]]
     ["filter" ["=" "tp" "a"]
       ["index-range" ["elems" "lt" "left-right" "b" false :pos-inf true]]]))
 
-(deftest "find: index most useful"
-  (assert-find {"where" ["and" ["=" "lt" "a"] ["=" "num" 1] ["=" "tp" "a"]]}
+(deftest "plan: index most useful"
+  (assert-plan {"where" ["and" ["=" "lt" "a"] ["=" "num" 1] ["=" "tp" "a"]]}
     ["filter" ["and" ["=" "lt" "a"] ["=" "num" 1] ["=" "tp" "a"]]
       ["collection-scan" "elems"]]
     ["filter" ["=" "lt" "a"]
       ["index-lookup" ["elems" ["num" "tp"] [1 "a"]]]]))
-
-(deftest "count: empty"
-  (assert= 0 (core/query db1 ["count" "foos"])))
-
-(deftest "count: all"
-  (assert= 6 (core/query db1 ["count" "elems"])))
-
-(deftest "count: qualified"
-  (assert= 3 (core/query db1 ["count" "elems" {"limit" 3}])))
 
 (deftest "insert: one"
   (let [[new-db1 c] (core/query db1 ["insert" "elems" {"id" 7}])]
