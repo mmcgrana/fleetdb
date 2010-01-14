@@ -128,7 +128,8 @@
         true))))
 
 (defn query* [dba q]
-  (if (types/write-queries (first q))
+  (if (types/read-queries (first q))
+    (core/query* @dba q)
     (fair-lock/fair-locking (:write-lock (meta dba))
       (let [old-db          @dba
             [new-db result] (core/query* old-db q)]
@@ -137,8 +138,7 @@
           (when-let [write-buf (:write-buf (meta dba))]
             (.add #^ArrayList write-buf q)))
         (assert (compare-and-set! dba old-db new-db))
-        result))
-    (core/query* @dba q)))
+        result))))
 
 (defn query [dba q]
   (rassert (dba? dba) "dba not recognized as a database")
