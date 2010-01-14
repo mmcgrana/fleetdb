@@ -256,6 +256,9 @@
 (defn- lint-compact [q]
   (lint-num-args q 0))
 
+(defn lint-info [q]
+  (lint-num-args q 0))
+
 (defn lint-query [q]
   (if-not (vector? q)
     (fail "query not a vector" q)
@@ -278,6 +281,7 @@
       "auth"             (lint-auth             q)
       "ping"             (lint-ping             q)
       "compact"          (lint-compact          q)
+      "info"             (lint-info             q)
       (fail "unrecognized query type" (nth q 0)))))
 
 (defn- lint-read-query [q]

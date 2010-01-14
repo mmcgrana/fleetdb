@@ -14,6 +14,17 @@
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
+(defn- info-map [dba]
+  (let [base {"fleetdb-version" fleetdb/version}
+        pers (embedded/persistent? dba)]
+    (if pers
+      (assoc base
+        "persistent"   true
+        "db-file-size" (file/size (embedded/write-path dba))
+        "compacting"   (embedded/compacting? dba))
+      (assoc base
+        "persistent"   false))))
+
 (defn- process-query [dba q needs-auth? password]
   (lint/lint-query q)
   (if needs-auth?
@@ -26,6 +37,7 @@
        "auth"    "auth unneeded"
        "ping"    "pong"
        "compact" (embedded/compact dba)
+       "info"    (info-map dba)
        (embedded/query* dba q))
      false]))
 

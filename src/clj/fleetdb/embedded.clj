@@ -11,15 +11,6 @@
 (defn- dba? [dba]
   (? (:write-lock (meta dba))))
 
-(defn- persistent? [dba]
-  (? (:writer (meta dba))))
-
-(defn- ephemeral? [dba]
-  (not (persistent? dba)))
-
-(defn- compacting? [dba]
-  (? (:write-buf (meta dba))))
-
 (defn- replay-query [db q]
   (first (core/query* db q)))
 
@@ -97,6 +88,12 @@
   (assert (compare-and-set! dba @dba nil))
   true)
 
+(defn persistent? [dba]
+  (? (:writer (meta dba))))
+
+(defn ephemeral? [dba]
+  (not (persistent? dba)))
+
 (defn fork [dba]
   (rassert (ephemeral? dba) "cannot fork persistent databases")
   (init* @dba))
@@ -107,6 +104,13 @@
     (write-db tmp-path @dba)
     (file/mv tmp-path snapshot-path)
     true))
+
+(defn write-path [dba]
+  (rassert (persistent? dba) "only persistent databases have files")
+  (:write-path (meta dba)))
+
+(defn compacting? [dba]
+  (? (:write-buf (meta dba))))
 
 (defn compact [dba]
   (rassert (persistent? dba) "cannot compact ephemeral database")
