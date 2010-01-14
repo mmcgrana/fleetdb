@@ -2,6 +2,7 @@
   (:use     (fleetdb util))
   (:require (fleetdb [file :as file] [thread-pool :as thread-pool]
                      [lint :as lint] [embedded :as embedded])
+            fleetdb
             (clj-stacktrace [repl :as stacktrace])
             (clojure.contrib [str-utils :as str-utils])
             [clj-json :as json])
@@ -102,6 +103,7 @@
   (println "-p <port>   TCP port to listen on (default: 3400)          ")
   (println "-a <addr>   Local address to listen on (default: 127.0.0.1)")
   (println "-t <num>    Maximum number of worker threads (default: 100)")
+  (println "-v          Print the FleetDB version and exit             ")
   (println "-h          Print this help and exit.                      "))
 
 (defn- parse-int [s]
@@ -109,18 +111,13 @@
 
 (defn -main [& args]
   (let [args-array (into-array String args)
-        opt-parser (OptionParser. "f:ep:a:t:x:h")
+        opt-parser (OptionParser. "f:ep:a:t:x:vh")
         opt-set    (.parse opt-parser args-array)]
     (cond
-      (not-any? #(.has opt-set #^String %) ["f" "e" "p" "a" "t" "h"])
-        (print-help)
       (.has opt-set "h")
         (print-help)
-      (not (empty? (.nonOptionArguments opt-set)))
-        (do
-          (printf "Unrecognized option '%s'. Use -h for help.\n"
-                  (first (.nonOptionArguments opt-set)))
-          (flush))
+      (.has opt-set "v")
+        (println fleetdb/version)
       (not (or (.has opt-set "f") (.has opt-set "e")))
         (println "You must specify either -e or -f <path>. Use -h for help.")
       :else
