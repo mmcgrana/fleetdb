@@ -243,6 +243,9 @@
     (lint-read-query read-query)
     (lint-write-query write-query)))
 
+(defn- lint-clear [q]
+  (lint-num-args q 0))
+
 (defn- lint-auth [q]
   (lint-num-args q 1)
   (lint string? (nth q 1) "password not a string"))
@@ -271,6 +274,7 @@
       "multi-read"       (lint-multi-read       q)
       "multi-write"      (lint-multi-write      q)
       "checked-write"    (lint-checked-write    q)
+      "clear"            (lint-clear            q)
       "auth"             (lint-auth             q)
       "ping"             (lint-ping             q)
       "compact"          (lint-compact          q)

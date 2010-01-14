@@ -497,6 +497,9 @@
 
 ;; Query implementations
 
+(defn init []
+  {})
+
 (defmulti query* (fn [db q] (first q)))
 
 (defmethod query* "select" [db [_ coll opts]]
@@ -602,9 +605,9 @@
         [new-db [true result]])
       [db [false actual]])))
 
+(defmethod query* "clear" [db [_ coll ispec]]
+  [(init) (count (query* db ["list-collections"]))])
+
 (defn query [db q]
   (lint/lint-query q)
   (query* db q))
-
-(defn init []
-  {})

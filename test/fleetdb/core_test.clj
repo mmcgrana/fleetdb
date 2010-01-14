@@ -369,3 +369,10 @@
         [db1-3 _] (core/query db1-2 ["create-index" "elems" [["age" "desc"] ["height" "asc"]]])]
     (assert= (set ["name" ["age" "height"] [["age" "desc"] ["height" "asc"]]])
              (set (core/query db1-3 ["list-indexes" "elems"])))))
+
+(deftest "clear"
+  (let [[db1-1 _] (core/query db1   ["insert" "foos" {"id" 1}])
+        [db1-2 r] (core/query db1-1 ["clear"])]
+    (assert= [] (core/query db1-2 ["list-collections"]))
+    (assert= 2 r)
+    (assert= [] (core/query db1-2 ["select" "elems"]))))
