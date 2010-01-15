@@ -457,15 +457,13 @@
                            (hash-set indexed record))))))
 
 (defn- index-delete [index on-fn record]
-  (let [aval    (on-fn record)
-        indexed (get index aval)]
-    (update index aval
-      (fn [indexed]
-        (condv indexed
-          set? (do (assert (contains? indexed record))
-                   (disj indexed record))
-          map? (do (assert (= indexed record))
-                   nil))))))
+  (update index (on-fn record)
+    (fn [indexed]
+      (condv indexed
+        set? (do (assert (contains? indexed record))
+                 (disj indexed record))
+        map? (do (assert (= indexed record))
+                 nil)))))
 
 (defn- empty-index [ispec]
   (sorted-map-by (attr-compare ispec)))
