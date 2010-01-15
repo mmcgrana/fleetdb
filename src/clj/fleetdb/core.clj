@@ -360,6 +360,11 @@
         (set? indexed) (seq indexed)
         :single        (list indexed)))
 
+(defn- indexed-count1 [indexed]
+  (cond (nil? indexed) 0
+        (set? indexed) (count indexed)
+        :single        1))
+
 (defn- indexed-flatten [indexeds]
   (lazy-seq
     (when-let [iseq (seq indexeds)]
@@ -396,13 +401,13 @@
   (indexed-flatten1 (index-lookup db lookup)))
 
 (defmethod count-plan "index-lookup" [db [_ lookup]]
-  (count (index-lookup db lookup)))
+  (indexed-count1 (index-lookup db lookup)))
 
 (defmethod find-plan  "index-range" [db [_ range]]
   (indexed-flatten (index-range db range)))
 
 (defmethod count-plan "index-range" [db [_ range]]
-  (reduce + (map count (index-range db range))))
+  (reduce + (map indexed-count1 (index-range db range))))
 
 (defn- coll-ispecs [db coll]
   (keys (get-in db [coll :imap])))

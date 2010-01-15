@@ -102,10 +102,13 @@
     (assert= plan1-expected plan1-actual)
     (assert= (or plan2-expected plan1-expected) plan2-actual)
     (let [res1-actual (core/query db1 ["select" "elems" opts])
-          res2-actual (core/query db2 ["select" "elems" opts])]
+          con1-actual (core/query db1 ["count"  "elems" (dissoc opts "only")])
+          res2-actual (core/query db2 ["select" "elems" opts])
+          con2-actual (core/query db2 ["count"  "elems" (dissoc opts "only")])]
       (if (get opts "order")
         (assert= res1-actual res2-actual)
-        (assert-set= res1-actual res2-actual)))))
+        (assert-set= res1-actual res2-actual))
+      (assert= con1-actual con2-actual))))
 
 (deftest "plan: no conditions"
   (assert-plan nil
