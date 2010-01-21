@@ -75,6 +75,26 @@
   (assert-find #{"e" "c"}
                db1 "elems" {"where" ["in" "id" [4 2]] "only" "lt"}))
 
+(deftest "find: distinct"
+  (let [count-occurr (fn [coll] (vals (reduce #(update-in %1 [%2] inc)
+                                              {"a" 0 "b" 0 "c" 0}
+                                              coll)))]
+    (assert-fn #(every? (partial = 1) (count-occurr %))
+               (core/query
+                 db1 ["select" "elems" {"distinct" true "only" "tp"}]))))
+
+(deftest "find: distinct preserves order (asc)"
+  (assert= ["a" "b" "c"]
+           (core/query
+             db1 ["select" "elems"
+                  {"distinct" true "only" "tp" "order" ["id" "asc"]}])))
+
+(deftest "find: distinct preserves order (desc)"
+  (assert= ["c" "b" "a"]
+           (core/query
+             db1 ["select" "elems"
+                  {"distinct" true "only" "tp" "order" ["id" "desc"]}])))
+
 (deftest "select: index lookup seqing"
   (let [db2-1 (first (core/query db2 ["insert" "elems" {"id" 7 "lt" "d"}]))]
     (assert-not-fn set? (core/query db2-1

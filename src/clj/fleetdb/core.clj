@@ -237,12 +237,17 @@
 (defn- only-plan [source only]
   (if only ["only" only source] source))
 
+(defn- distinct-plan [source distinct]
+  (if distinct ["distinct" source] source))
+
 (defn- make-plan [coll ispecs opts]
-  (let [{where "where" order "order" offset "offset" limit "limit" only "only"} opts]
+  (let [{where "where" order "order" offset   "offset"
+         limit "limit" only  "only"  distinct "distinct"} opts]
     (-> (where-order-plan coll ispecs where order)
       (offset-plan offset)
       (limit-plan  limit)
-      (only-plan   only))))
+      (only-plan   only)
+      (distinct-plan distinct))))
 
 
 ;; Find execution
@@ -325,6 +330,12 @@
       (map (fn [r] (map #(r %) only)) (find-plan db source))
     string?
       (map (fn [r] (r only)) (find-plan db source))))
+
+(defmethod find-plan  "distinct" [db [_ source]]
+  (distinct (find-plan db source)))
+
+(defmethod count-plan "distinct" [db plan]
+  (count (find-plan db plan)))
 
 (defmethod find-plan  "union" [db [_ order sources]]
   (uniq

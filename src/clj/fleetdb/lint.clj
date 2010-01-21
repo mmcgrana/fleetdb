@@ -109,6 +109,9 @@
     (vector?  only) (domap lint-attr only)
     :else           (fail "unrecognized only value" only)))
 
+(defn- lint-distinct [d]
+  (lint (partial contains? #{true false}) d "distinct must be true or false"))
+
 (defn- lint-find-opts [opts allow-only]
   (when-not (nil? opts)
     (lint map? opts "options not a map")
@@ -122,6 +125,7 @@
           (if-not allow-only
             (fail "only option not applicable for this query" opt-val)
             (lint-only opt-val))
+        "distinct" (lint-distinct opt-val)
         (fail "unrecognized find option" opt-name)))))
 
 (defn- lint-id [i]
