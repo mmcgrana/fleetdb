@@ -1,4 +1,4 @@
-(defproject fleetdb "0.1.0"
+(defproject fleetdb "0.1.1-SNAPSHOT"
   :description "A schema-free database optimized for agile development."
   :url "http://github.com/mmcgrana/fleetdb"
   :source-path "src/clj"
@@ -12,4 +12,4 @@
   :dev-dependencies [[lein-clojars "0.5.0-SNAPSHOT"]
                      [clj-unit "0.1.0-SNAPSHOT"]
                      [lein-javac "0.0.2-SNAPSHOT"]
-                     [fleetdb-client "0.1.0"]])
+                     [fleetdb-client "0.1.1-SNAPSHOT"]])
