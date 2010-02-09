@@ -56,6 +56,9 @@
 (deftest "find: by ids"
   (assert-find #{r4 r2} db1 "elems" {"where" ["in" "id" [4 100 2]]}))
 
+(deftest "find: not by ids"
+	(assert-find #{r4 r2} db1 "elems" {"where" ["not in" "id" [1 3 5 6]]}))
+
 (deftest "find: by simple ad-hoc pred"
   (assert-find [r4] db1 "elems" {"where" ["=" "lt" "e"]}))
 

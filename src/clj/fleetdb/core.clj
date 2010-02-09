@@ -152,7 +152,7 @@
   #{"<" "<=" ">" ">=" "><" ">=<" "><=" ">=<="})
 
 (def- other-op?
-  #{"!=" "in" "or"})
+  #{"!=" "in" "not in" "or"})
 
 (defn- cond-low-high [op v]
   (condp = op
@@ -292,7 +292,12 @@
       (let [[attr aval-vec] wrest
             aval-set        (set aval-vec)]
         (fn [record]
-          (contains? aval-set (record attr))))))
+          (contains? aval-set (record attr))))
+		(= op "not in")
+		  (let [[attr aval-vec] wrest
+		        aval-set        (set aval-vec)]
+		    (fn [record]
+		      (not (contains? aval-set (record attr)))))))
 
 (defmulti- find-plan
   (fn [db [plan-type _]] plan-type))

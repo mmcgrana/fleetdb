@@ -68,6 +68,7 @@
 (def- sing-ops #{"=" "!=" "<" "<=" ">" ">="})
 (def- doub-ops #{"><" ">=<" "><=" ">=<="})
 (def- conj-ops #{"and" "or"})
+(def- incl-ops #{"in" "not in"})
 
 (defn- lint-where [where]
   (lint vector? where "where not a vector")
@@ -93,12 +94,12 @@
          (let [[_ & sub-wheres] where]
            (lint #(not (empty? %)) sub-wheres "no sub clauses given")
            (domap lint-where sub-wheres))
-       (= "in" op)
+       (incl-ops op)
          (do
-           (lint #(= 3 (count %)) where "in clause has 2 arguments")
+           (lint #(= 3 (count %)) where (str op " clause has 2 arguments"))
            (let [[_ attr vals] where]
              (lint-attr attr)
-             (lint sequential? vals "vals for in must be in a sequence")
+             (lint sequential? vals (str "vals for" op "must be in a sequence"))
              (domap lint-val vals)))
        :else
          (fail "unrecognized where operation" op))))
