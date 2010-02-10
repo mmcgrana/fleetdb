@@ -68,7 +68,7 @@
 (def- sing-ops #{"=" "!=" "<" "<=" ">" ">="})
 (def- doub-ops #{"><" ">=<" "><=" ">=<="})
 (def- conj-ops #{"and" "or"})
-(def- incl-ops #{"in" "not in"})
+(def- incl-ops #{"in" "not-in"})
 
 (defn- lint-where [where]
   (lint vector? where "where not a vector")

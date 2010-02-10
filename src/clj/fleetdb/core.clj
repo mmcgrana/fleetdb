@@ -152,7 +152,7 @@
   #{"<" "<=" ">" ">=" "><" ">=<" "><=" ">=<="})
 
 (def- other-op?
-  #{"!=" "in" "not in" "or"})
+  #{"!=" "in" "not-in" "or"})
 
 (defn- cond-low-high [op v]
   (condp = op
@@ -293,7 +293,7 @@
             aval-set        (set aval-vec)]
         (fn [record]
           (contains? aval-set (record attr))))
-		(= op "not in")
+		(= op "not-in")
 		  (let [[attr aval-vec] wrest
 		        aval-set        (set aval-vec)]
 		    (fn [record]
