@@ -92,6 +92,6 @@
   (with-dba [dba-0 (embedded/init-persistent log-path)]
     (dotimes [i 3]
       (embedded/query dba-0 ["insert" "elems" {"id" (+ 3 i)}])))
-  (.setLength (RandomAccessFile. (File. log-path) "rw") 70)
+  (.setLength (RandomAccessFile. (File. #^String log-path) "rw") 70)
   (with-dba [dba-1 (embedded/load-persistent log-path)]
     (assert= 2 (embedded/query dba-1 ["count" "elems"]))))
