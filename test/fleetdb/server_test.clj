@@ -10,7 +10,7 @@
      :reader (BufferedReader. (InputStreamReader.  (.getInputStream socket)))
      :socket socket}))
 
-(defn- client-write [client text]
+(defn- client-write [client #^String text]
   (let [#^BufferedWriter writer (:writer client)]
     (.write writer text)
     (.flush writer)))
