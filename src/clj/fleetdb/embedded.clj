@@ -3,7 +3,7 @@
         [clojure.contrib.seq-utils :only (partition-all)])
   (:require (fleetdb [types :as types] [lint :as lint] [core :as core]
                      [fair-lock :as fair-lock] [file :as file])
-            [clj-json :as json])
+            (clj-json [core :as json]))
   (:import  (java.util ArrayList)
             (java.io FileReader BufferedReader FileWriter BufferedWriter
                      File RandomAccessFile)))

@@ -5,7 +5,7 @@
             fleetdb
             (clj-stacktrace [repl :as stacktrace])
             (clojure.contrib [str-utils :as str-utils])
-            [clj-json :as json])
+            (clj-json [core :as json]))
   (:import  (java.net ServerSocket Socket InetAddress)
             (java.io BufferedWriter OutputStreamWriter
                      BufferedReader InputStreamReader)
