@@ -1,15 +1,17 @@
 (ns fleetdb.server
-  (:use     (fleetdb util))
+  (:use     (fleetdb util)
+            (clojure.contrib [def :only (defvar-)]))
   (:require (fleetdb [file :as file] [thread-pool :as thread-pool]
                      [lint :as lint] [embedded :as embedded])
             fleetdb
             (clj-stacktrace [repl :as stacktrace])
-            (clojure.contrib [str-utils :as str-utils])
+            (clojure.contrib [str-utils :as str-utils] [duck-streams :as du])
             (clj-json [core :as json]))
   (:import  (java.net ServerSocket Socket InetAddress)
             (java.io BufferedWriter OutputStreamWriter
                      BufferedReader InputStreamReader)
             (org.codehaus.jackson JsonParseException)
+            (clojure.lang RT)
             (fleetdb FleetDBException)
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
@@ -121,6 +123,10 @@
 (defn- parse-int [s]
   (and s (Integer/decode s)))
 
+(let [stream  (.getResourceAsStream (RT/baseLoader) "project.clj")
+      version (nth (read-string (du/slurp* stream)) 2)]
+  (defvar- fleetdb-version version))
+
 (defn -main [& args]
   (let [args-array (into-array String args)
         opt-parser (OptionParser. "f:ep:a:t:x:vh")
@@ -129,7 +135,7 @@
       (.has opt-set "h")
         (print-help)
       (.has opt-set "v")
-        (println fleetdb/version)
+        (println fleetdb-version)
       (not (or (.has opt-set "f") (.has opt-set "e")))
         (println "You must specify either -e or -f <path>. Use -h for help.")
       :else
