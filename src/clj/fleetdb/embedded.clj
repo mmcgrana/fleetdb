@@ -15,18 +15,16 @@
   (first (core/query* db q)))
 
 (defn- check-log [read-path]
-  (let [f      (File. #^String read-path)
-        raf    (RandomAccessFile. f "rw")
-        last-i (dec (.length f))]
-    (.seek raf last-i)
-    (when-not (= 10 (.read raf))
-      (loop [i last-i]
-        (.seek raf i)
-        (if (= 10 (.read raf))
-          (let [truncate-to (inc i)]
-            (.setLength raf truncate-to)
-            truncate-to)
-          (recur (dec i)))))))
+  (let [f (File. #^String read-path)
+        raf (RandomAccessFile. f "rw")]
+    (loop [l (.length f)]
+      (if (= 0 l)
+        (.setLength raf 0)
+        (do
+          (.seek raf (dec l))
+          (if (= 10 (.read raf))
+            (.setLength raf l)
+            (recur (dec l))))))))
 
 (defn- read-db [read-path]
   (check-log read-path)

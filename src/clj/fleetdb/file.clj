@@ -17,3 +17,6 @@
 
 (defn rm [#^String path]
   (.delete (File. path)))
+
+(defn touch [#^String path]
+  (.createNewFile (File. path)))

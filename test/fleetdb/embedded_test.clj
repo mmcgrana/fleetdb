@@ -91,7 +91,7 @@
   (with-dba [dba-1 (embedded/load-persistent log-path)]
     (assert= 5001 (embedded/query dba-1 ["count" "elems"])))))
 
-(deftest "persistent: check"
+(deftest "persistent: check nonempty"
   (file/rm log-path)
   (with-dba [dba-0 (embedded/init-persistent log-path)]
     (dotimes [i 3]
@@ -99,3 +99,8 @@
   (.setLength (RandomAccessFile. (File. #^String log-path) "rw") 70)
   (with-dba [dba-1 (embedded/load-persistent log-path)]
     (assert= 2 (embedded/query dba-1 ["count" "elems"]))))
+
+(deftest "persistent: check empty"
+  (file/rm log-path)
+  (file/touch log-path)
+  (embedded/load-persistent log-path))
