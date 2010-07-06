@@ -1,5 +1,6 @@
 (ns fleetdb.util
   (:require (clojure.contrib [def :as def]))
+  (:require (clj-stacktrace [repl :as stacktrace]))
   (:import  (fleetdb FleetDBException)))
 
 (def/defalias def- def/defvar-)
@@ -79,4 +80,11 @@
   (reduce (fn [int-m [k v]] (assoc int-m k (f k v))) {} m))
 
 (defmacro spawn [& body]
-  `(doto (Thread. (fn [] ~@body)) (.start)))
+  `(doto (Thread.
+           (fn []
+             (try
+               ~@body
+               (catch Exception e#
+                 (stacktrace/pst-on System/err false e#)
+                 (.println System/err)))))
+        (.start)))
