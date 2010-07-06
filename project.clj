@@ -6,7 +6,7 @@
   :javac-fork "true"
   :dependencies [[org.clojure/clojure "1.1.0"]
                  [org.clojure/clojure-contrib "1.1.0"]
-                 [clj-stacktrace "0.1.0"]
+                 [clj-stacktrace "0.1.2"]
                  [net.sf.jopt-simple/jopt-simple "3.2"]
                  [clj-json "0.2.0"]]
   :dev-dependencies [[org.clojars.mmcgrana/lein-clojars "0.5.0"]
