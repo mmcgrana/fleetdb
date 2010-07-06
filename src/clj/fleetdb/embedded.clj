@@ -92,7 +92,7 @@
 
 (defn snapshot [dba snapshot-path]
   (rassert (ephemeral? dba) "cannot snapshot persistent databases")
-  (let [tmp-path  (file/tmp-path "/tmp" "snapshot")]
+  (let [tmp-path (str snapshot-path ".tmp")]
     (write-db tmp-path @dba)
     (file/mv tmp-path snapshot-path)
     true))
@@ -109,7 +109,7 @@
   (fair-lock/fair-locking (:write-lock (meta dba))
     (if (compacting? dba)
       false
-      (let [tmp-path    (file/tmp-path "/tmp" "compact")
+      (let [tmp-path (str (:write-path (meta dba)) ".tmp")
             db-at-start @dba]
         (alter-meta! dba assoc :write-buf (ArrayList.))
         (spawn
