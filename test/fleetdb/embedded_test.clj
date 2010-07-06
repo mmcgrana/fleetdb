@@ -75,17 +75,21 @@
 (deftest "persistent: compact"
   (file/rm log-path)
   (with-dba [dba-0 (embedded/init-persistent log-path)]
-    (dotimes [i 100]
+    (dotimes [i 10000]
       (embedded/query dba-0 ["insert" "elems" {"id" (+ 3 i)}])
       (when (odd? i)
         (embedded/query dba-0 ["delete" "elems" {"where" ["=" "id" i]}])))
     (let [pre-compact-size (file/size log-path)]
       (embedded/compact dba-0)
-      (Thread/sleep 100)
+      (embedded/query dba-0 ["insert" "elems" {"id" (+ 3 10000)}])
+      (assert-that (embedded/compacting? dba-0))
+      (loop []
+        (when (embedded/compacting? dba-0)
+          (Thread/sleep 50) (recur)))
       (let [post-compact-size (file/size log-path)]
         (assert-fn #(< % pre-compact-size) post-compact-size)))
   (with-dba [dba-1 (embedded/load-persistent log-path)]
-    (assert= 51 (embedded/query dba-1 ["count" "elems"])))))
+    (assert= 5001 (embedded/query dba-1 ["count" "elems"])))))
 
 (deftest "persistent: check"
   (file/rm log-path)

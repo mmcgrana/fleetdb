@@ -42,16 +42,10 @@
 (defn- close-writer [#^BufferedWriter writer]
   (.close writer))
 
-(defn- write-query [#^BufferedWriter writer query]
+(defn- write-query [#^BufferedWriter writer query & [flush]]
   (.write writer #^String (json/generate-string query))
   (.write writer "\r\n")
-  (.flush writer))
-
-(defn- write-queries [#^BufferedWriter writer queries]
-  (doseq [q queries]
-    (write-query writer)
-    (.write writer #^String (json/generate-string q))
-    (.flush writer)))
+  (if flush (.flush writer)))
 
 (defn- write-db [write-path db]
   (let [writer (new-writer write-path)]
@@ -124,7 +118,8 @@
           (write-db tmp-path db-at-start)
           (fair-lock/fair-locking (:write-lock (meta dba))
             (let [writer (new-writer tmp-path)]
-              (write-queries writer (:write-buf (meta dba)))
+              (doseq [q (:write-buf (meta dba))]
+                (write-query writer q))
               (file/mv tmp-path (:write-path (meta dba)))
               (close-writer (:writer (meta dba)))
               (alter-meta! dba dissoc :write-buf)
@@ -138,7 +133,7 @@
       (let [old-db          @dba
             [new-db result] (core/query* old-db q)]
         (when-let [writer (:writer (meta dba))]
-          (write-query writer q)
+          (write-query writer q true)
           (when-let [write-buf (:write-buf (meta dba))]
             (.add #^ArrayList write-buf q)))
         (assert (compare-and-set! dba old-db new-db))
