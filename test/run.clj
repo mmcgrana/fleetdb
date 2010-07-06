@@ -1,5 +1,4 @@
 (use 'clj-unit.core)
-(use '(fleetdb [util :only (spawn)]))
 (use '(fleetdb [file :only (exist?)]))
 
 (def base-tests
