@@ -16,7 +16,9 @@
     (.flush writer)))
 
 (defn- client-read [client]
-  (str (.readLine #^BufferedReader (:reader client)) "\r\n"))
+  (let [line (.readLine #^BufferedReader (:reader client))]
+    (assert (not= "" line))
+    (str line "\r\n")))
 
 (defn- client-close [client]
   (.close #^BufferedReader (:reader client))
