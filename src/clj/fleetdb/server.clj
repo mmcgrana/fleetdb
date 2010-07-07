@@ -120,6 +120,7 @@
   (println "-p <port>   TCP port to listen on (default: 3400)          ")
   (println "-a <addr>   Local address to listen on (default: 127.0.0.1)")
   (println "-t <num>    Maximum number of worker threads (default: 100)")
+  (println "-x <pass>   Require clients to authenticate                ")
   (println "-v          Print the FleetDB version and exit             ")
   (println "-h          Print this help and exit.                      "))
 
