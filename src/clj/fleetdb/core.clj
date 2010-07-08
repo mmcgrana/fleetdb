@@ -541,20 +541,10 @@
       [(rmap-insert int-rmap record)
        (imap-insert int-imap record)])))
 
-(defn update-merge [m1 m2]
-  (reduce
-    (fn [m-int [k v]]
-      (cond
-        (nil? v)     (dissoc m-int k)
-        (= "$inc" k) (let [[attr by] (first v)]
-                       (update m-int attr #(+ by %)))
-        :new-val     (assoc m-int k v)))
-    m1 m2))
-
 (defmethod query* "update" [db [_ coll with opts]]
   (db-apply db coll (find-records db coll opts)
     (fn [[int-rmap int-imap] old-record]
-      (let [new-record (update-merge old-record with)]
+      (let [new-record (merge-compact old-record with)]
         [(rmap-update int-rmap old-record new-record)
          (imap-update int-imap old-record new-record)]))))
 
