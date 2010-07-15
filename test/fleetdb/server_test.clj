@@ -43,8 +43,8 @@
 (deftest "info"
   (with-client client 3400
     (client-write client "[\"info\"]\r\n")
-    (assert= "[0,{\"persistent\":false,\"fleetdb-version\":\"0.2.0-RC2\"}]\r\n"
-             (client-read client))))
+    (assert-match #"\[0\,\{\"persistent\":false\,\"fleetdb-version\":\"\d\.\d\.\d.*\"\}\]\r\n"
+                  (client-read client))))
 
 (deftest "valid query"
   (with-client client 3400
