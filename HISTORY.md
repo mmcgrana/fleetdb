@@ -1,3 +1,5 @@
+## 0.2.0 (2010-07-15)
+
 ## 0.2.0-RC2 (2010-07-09)
 
 * Put temporary snapshot and compact files in the same directory as the corresponding main files instead of /tmp

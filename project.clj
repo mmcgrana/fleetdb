@@ -1,4 +1,4 @@
-(defproject fleetdb "0.2.0-RC2"
+(defproject fleetdb "0.2.0"
   :description "A schema-free database optimized for agile development."
   :url "http://github.com/mmcgrana/fleetdb"
   :source-path "src/clj"
