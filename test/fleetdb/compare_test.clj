@@ -41,8 +41,8 @@
   (assert= 4 (c :foo :bar)))
 
 (deftest "non-matching elems"
-  (assert-throws #"Cannot compare"
-    (c 1 :one)))
+  (assert-throws Exception #"Cannot compare"
+   (c 1 :one)))
 
 (deftest "vectors"
   (assert= 0 (c [1 :2] [1 :2]))
@@ -52,7 +52,7 @@
   (assert= -1 (c [1 :neg-inf] [1 0])))
 
 (deftest "non-matching vectors"
-  (assert-throws #"Cannot compare"
+  (assert-throws Exception #"Cannot compare"
     (c [1 2] [1]))
-  (assert-throws #"Cannot compare"
+  (assert-throws Exception #"Cannot compare"
     (c [1] [:one])))

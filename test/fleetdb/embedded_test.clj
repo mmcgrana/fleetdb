@@ -15,7 +15,7 @@
 
 (deftest "embeded: catches linting errors"
   (with-dba [dba (embedded/init-ephemeral)]
-    (assert-throws #"Malformed query: query not a vector '\"foo\"'"
+    (assert-throws Exception #"Malformed query: query not a vector '\"foo\"'"
       (embedded/query dba "foo"))))
 
 (deftest "ephemeral: init"

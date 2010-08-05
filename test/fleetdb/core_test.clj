@@ -105,7 +105,7 @@
 
 (deftest "select: raise on mixed attr types"
   (let [db1-1 (first (core/query db1 ["insert" "elems" {"id" 7 "lt" 3}]))]
-    (assert-throws #"Cannot compare"
+    (assert-throws Exception #"Cannot compare"
       (core/query db1-1 ["select" "elems" {"order" ["lt" "asc"]}]))))
 
 (deftest "explain: select, count, update, delete"
@@ -262,15 +262,15 @@
     (assert= [{"id" 7}] (core/query new-db1 ["select" "elems" {"where" ["=" "id" 7]}]))))
 
 (deftest "insert: no id"
-  (assert-throws #"Record does not have an id"
+  (assert-throws Exception #"Record does not have an id"
     (core/query db1 ["insert" "elems" {"lt" "g"}])))
 
 (deftest "insert: duplicated existing id"
-  (assert-throws #"Duplicated id"
+  (assert-throws Exception #"Duplicated id"
     (core/query db1 ["insert" "elems" {"id" 2}])))
 
 (deftest "insert: duplicated given ids"
-  (assert-throws #"Duplicated id"
+  (assert-throws Exception #"Duplicated id"
     (core/query db1 ["insert" "elems" [{"id" 1} {"id" 1}]])))
 
 (deftest "insert: new coll"

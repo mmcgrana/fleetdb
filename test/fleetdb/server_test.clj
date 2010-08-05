@@ -82,7 +82,7 @@
     (test-ping client)))
 
 (defn- test-auth-tryop [client]
-  (assert-throws #"Connection reset"
+  (assert-throws Exception #"Connection reset"
     (do
       (client-write client "[\"insert\",\"elems\",{\"id\":1}]\r\n")
       (client-read client))))
