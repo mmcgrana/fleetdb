@@ -1,6 +1,5 @@
 (ns fleetdb.server
-  (:use     (fleetdb util)
-            (clojure.contrib [def :only (defvar-)]))
+  (:use     (fleetdb util))
   (:require (fleetdb [file :as file] [thread-pool :as thread-pool]
                      [lint :as lint] [embedded :as embedded])
             (clj-stacktrace [repl :as stacktrace])
@@ -15,9 +14,10 @@
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
-(let [stream  (.getResourceAsStream (RT/baseLoader) "project.clj")
-      version (nth (read-string (du/slurp* stream)) 2)]
-  (defvar- fleetdb-version version))
+
+(def fleetdb-version
+  (let [stream  (.getResourceAsStream (RT/baseLoader) "project.clj")]
+    (nth (read-string (du/slurp* stream)) 2)))
 
 (defn- info-map [dba]
   (let [base {"fleetdb-version" fleetdb-version}

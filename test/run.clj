@@ -1,5 +1,6 @@
 (use 'clj-unit.core)
-(use '(fleetdb [file :only (exist?)]))
+(require '[fleetdb.file :as file])
+(require '[fleetdb.server :as server])
 
 (def base-tests
   ['fleetdb.compare-test
@@ -14,14 +15,15 @@
 
 (defn boot-servers []
   (println "Booting servers...")
-  (when-not (exist? "fleetdb-standalone.jar")
-    (println "fleetdb-standalone.jar missing: run `lein uberjar`")
-    (System/exit 1))
-  (let [procs
-          [(exec "java""-cp" "fleetdb-standalone.jar" "fleetdb.server" "-e" "-p" "3400")
-           (exec "java""-cp" "fleetdb-standalone.jar" "fleetdb.server" "-e" "-p" "3401" "-x" "pass")]]
-    (Thread/sleep 2000)
-    procs))
+  (let [path (str "fleetdb-standalone-" server/fleetdb-version ".jar")]
+    (when-not (file/exist? path)
+      (println path "missing: run `lein uberjar`")
+      (System/exit 1))
+    (let [procs
+            [(exec "java" "-cp" path "fleetdb.server" "-e" "-p" "3400")
+             (exec "java" "-cp" path "fleetdb.server" "-e" "-p" "3401" "-x" "pass")]]
+      (Thread/sleep 2000)
+      procs)))
 
 (defn kill-servers [procs]
   (doseq [#^Process proc procs]
