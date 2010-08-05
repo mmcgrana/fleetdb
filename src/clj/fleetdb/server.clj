@@ -3,7 +3,7 @@
   (:require (fleetdb [file :as file] [thread-pool :as thread-pool]
                      [lint :as lint] [embedded :as embedded])
             (clj-stacktrace [repl :as stacktrace])
-            (clojure.contrib [str-utils :as str-utils] [duck-streams :as du])
+            (clojure.contrib [io :as io])
             (clj-json [core :as json]))
   (:import  (java.net ServerSocket Socket InetAddress)
             (java.io BufferedWriter OutputStreamWriter
@@ -17,7 +17,7 @@
 
 (def fleetdb-version
   (let [stream  (.getResourceAsStream (RT/baseLoader) "project.clj")]
-    (nth (read-string (du/slurp* stream)) 2)))
+    (nth (read-string (io/slurp* stream)) 2)))
 
 (defn- info-map [dba]
   (let [base {"fleetdb-version" fleetdb-version}
