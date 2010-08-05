@@ -1,6 +1,5 @@
 (ns fleetdb.embedded
-  (:use [fleetdb.util :only (def- ? spawn rassert raise)]
-        [clojure.contrib.seq-utils :only (partition-all)])
+  (:use [fleetdb.util :only (def- ? spawn rassert raise)])
   (:require (fleetdb [types :as types] [lint :as lint] [core :as core]
                      [fair-lock :as fair-lock] [file :as file])
             (clj-json [core :as json]))
