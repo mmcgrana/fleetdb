@@ -1,4 +1,10 @@
+## 0.3.0 (2010-08-30)
+
+* Clojure 1.2 compatibility
+
 ## 0.2.0 (2010-07-15)
+
+* No user-facing changes
 
 ## 0.2.0-RC2 (2010-07-09)
 
