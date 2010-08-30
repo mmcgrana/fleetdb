@@ -15,7 +15,7 @@
 
 (defn boot-servers []
   (println "Booting servers...")
-  (let [path (str "fleetdb-standalone-" server/fleetdb-version ".jar")]
+  (let [path (str "fleetdb-" server/fleetdb-version "-standalone.jar")]
     (when-not (file/exist? path)
       (println path "missing: run `lein uberjar`")
       (System/exit 1))
