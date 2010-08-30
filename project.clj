@@ -4,6 +4,7 @@
   :source-path "src/clj"
   :java-source-path "src/jvm/"
   :javac-fork "true"
+  :hooks [leiningen.hooks.javac]
   :namespaces [fleetdb.server]
   :dependencies
     [[org.clojure/clojure "1.2.0"]
@@ -12,5 +13,5 @@
      [net.sf.jopt-simple/jopt-simple "3.2"]
      [clj-json "0.2.0"]]
   :dev-dependencies
-    [[lein-javac "1.2.1-SNAPSHOT"]
+    [[org.clojars.mmcgrana/lein-javac "1.2.1"]
      [clj-unit "0.1.0"]])
