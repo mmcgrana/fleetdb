@@ -40,9 +40,9 @@
   (lint map? r "record not a map")
   (domap lint-prop r))
 
-(defn- lint-pos-int [i type]
-  (lint #(and (integer? %) (pos? %)) i
-    (str type " not a positive integer")))
+(defn- lint-non-neg-int [i type]
+  (lint #(and (integer? %) (not (neg? %))) i
+    (str type " not a non-negative integer")))
 
 (defn- lint-order-comp [order-comp]
   (lint vector? order-comp "order component not a vector")
@@ -109,8 +109,8 @@
     (lint map? opts "options not a map")
     (doseq [[opt-name opt-val] opts]
       (condp = opt-name
-        "limit"  (lint-pos-int opt-val "limit")
-        "offset" (lint-pos-int opt-val "offset")
+        "limit"  (lint-non-neg-int opt-val "limit")
+        "offset" (lint-non-neg-int opt-val "offset")
         "order"  (lint-order opt-val)
         "where"  (lint-where opt-val)
         "only"
