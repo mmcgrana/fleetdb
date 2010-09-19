@@ -1,3 +1,7 @@
+## 0.3.1 (2010-09-19)
+
+* Allow `limit` and `offset` to be 0.
+
 ## 0.3.0 (2010-08-30)
 
 * Clojure 1.2 compatibility
