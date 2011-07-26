@@ -1,10 +1,18 @@
 (ns fleetdb.util
-  (:require (clojure.contrib [def :as def]))
   (:require (clj-stacktrace [repl :as stacktrace]))
   (:import  (fleetdb FleetDBException)))
 
-(def/defalias def- def/defvar-)
-(def/defalias defmacro- def/defmacro-)
+; Taken from clojure.contrib.def to remove dependency on old contrib.
+; This is also in new contrib, but that is still a SNAPSHOT.
+(defmacro defmacro-
+  "Same as defmacro but yields a private definition"
+  [name & decls]
+  (list* `defmacro (with-meta name (assoc (meta name) :private true)) decls))
+
+(defmacro def-
+  "Same as def but yields a private definition"
+  [name & decls]
+  (list* `def (with-meta name (assoc (meta name) :private true)) decls))
 
 (defmacro defmulti-
   [name & decls]
