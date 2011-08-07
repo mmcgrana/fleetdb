@@ -29,7 +29,7 @@
               (recur))))))))
 
 (def fleetdb-version
-  (let [stream  (.getResourceAsStream (RT/baseLoader) "project.clj")]
+  (let [stream (.getResourceAsStream (RT/baseLoader) "project.clj")]
     (nth (read-string (slurp* stream)) 2)))
 
 (defn- info-map [dba]
