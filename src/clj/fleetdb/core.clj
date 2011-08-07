@@ -604,7 +604,7 @@
 (defmethod query* "drop-index" [db [_ coll ispec]]
   (if-not (get-in db [coll :imap ispec])
     [db 0]
-    [(core/dissoc-in db [coll :imap ispec]) 1]))
+    [(dissoc-in db [coll :imap ispec]) 1]))
 
 (defmethod query* "list-indexes" [db [_ coll]]
   (or (keys (get-in db [coll :imap])) (list)))
