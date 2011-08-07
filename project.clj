@@ -2,7 +2,7 @@
   :description "A schema-free database optimized for agile development."
   :url "http://github.com/mmcgrana/fleetdb"
   :source-path "src/clj"
-  :java-source-path "src/jvm/"
+  :java-source-path "src/jvm"
   :javac-fork "true"
   :aot [fleetdb.server]
   :dependencies
