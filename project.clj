@@ -4,7 +4,6 @@
   :source-path "src/clj"
   :java-source-path "src/jvm/"
   :javac-fork "true"
-  :hooks [leiningen.hooks.javac]
   :aot [fleetdb.server]
   :dependencies
     [[org.clojure/clojure "1.2.0"]
