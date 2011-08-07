@@ -4,8 +4,7 @@
   (:require (fleetdb [lint :as lint] [types :as types]))
   (:use (fleetdb util)))
 
-; Taken from clojure.contrib.core to remove dependency on old contrib.
-; This is also in new contrib, but that is still a SNAPSHOT.
+; From clojure.contrib.core.
 (defn dissoc-in
   "Dissociates an entry from a nested associative structure returning a new
   nested structure. keys is a sequence of keys. Any empty maps that result

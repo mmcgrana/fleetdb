@@ -14,7 +14,7 @@
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
-; Taken from clojure.contrib.io to remove dependency on old contrib.
+; From clojure.contrib.io.
 (defn ^String slurp*
   "Like clojure.core/slurp but opens f with reader."
   [f]

@@ -2,8 +2,7 @@
   (:require (clj-stacktrace [repl :as stacktrace]))
   (:import  (fleetdb FleetDBException)))
 
-; Taken from clojure.contrib.def to remove dependency on old contrib.
-; This is also in new contrib, but that is still a SNAPSHOT.
+; From clojure.contrib.def.
 (defmacro defmacro-
   "Same as defmacro but yields a private definition"
   [name & decls]
