@@ -3,7 +3,7 @@
   (:require (fleetdb [file :as file] [thread-pool :as thread-pool]
                      [lint :as lint] [embedded :as embedded])
             (clj-stacktrace [repl :as stacktrace])
-            (clojure.java.io [io :as io])
+            (clojure.java [io :as io])
             (clj-json [core :as json]))
   (:import  (java.net ServerSocket Socket InetAddress)
             (java.io BufferedWriter OutputStreamWriter
