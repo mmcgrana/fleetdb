@@ -5,7 +5,7 @@
   :java-source-path "src/jvm/"
   :javac-fork "true"
   :hooks [leiningen.hooks.javac]
-  :namespaces [fleetdb.server]
+  :aot [fleetdb.server]
   :dependencies
     [[org.clojure/clojure "1.2.0"]
      [org.clojure/clojure-contrib "1.2.0"]
