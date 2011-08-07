@@ -3,7 +3,7 @@
   (:require (fleetdb [file :as file] [thread-pool :as thread-pool]
                      [lint :as lint] [embedded :as embedded])
             (clj-stacktrace [repl :as stacktrace])
-            (clojure.contrib [io :as io])
+            (clojure.java.io [io :as io])
             (clj-json [core :as json]))
   (:import  (java.net ServerSocket Socket InetAddress)
             (java.io BufferedWriter OutputStreamWriter
@@ -14,10 +14,23 @@
             (joptsimple OptionParser OptionSet OptionException))
   (:gen-class))
 
+; Taken from clojure.contrib.io to remove dependency on old contrib.
+(defn ^String slurp*
+  "Like clojure.core/slurp but opens f with reader."
+  [f]
+  (with-open [^BufferedReader r (io/reader f)]
+    (let [sb (StringBuilder.)]
+      (loop []
+        (let [c (.read r)]
+          (if (neg? c)
+            (str sb)
+            (do
+              (.append sb (char c))
+              (recur))))))))
 
 (def fleetdb-version
   (let [stream  (.getResourceAsStream (RT/baseLoader) "project.clj")]
-    (nth (read-string (io/slurp* stream)) 2)))
+    (nth (read-string (slurp* stream)) 2)))
 
 (defn- info-map [dba]
   (let [base {"fleetdb-version" fleetdb-version}

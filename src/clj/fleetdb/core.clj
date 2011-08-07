@@ -1,9 +1,24 @@
 (ns fleetdb.core
   (:import (clojure.lang Sorted RT)
            (fleetdb Compare))
-  (:require (clojure.contrib [core :as core])
-            (fleetdb [lint :as lint] [types :as types]))
+  (:require (fleetdb [lint :as lint] [types :as types]))
   (:use (fleetdb util)))
+
+; Taken from clojure.contrib.core to remove dependency on old contrib.
+; This is also in new contrib, but that is still a SNAPSHOT.
+(defn dissoc-in
+  "Dissociates an entry from a nested associative structure returning a new
+  nested structure. keys is a sequence of keys. Any empty maps that result
+  will not be present in the new structure."
+  [m [k & ks :as keys]]
+  (if ks
+    (if-let [nextmap (get m k)]
+      (let [newmap (dissoc-in nextmap ks)]
+        (if (pos? (count newmap))
+          (assoc m k newmap)
+          (dissoc m k)))
+      m)
+    (dissoc m k)))
 
 ;; General ordering
 
