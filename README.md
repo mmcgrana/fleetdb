@@ -1,3 +1,5 @@
-FleetDB is a schema-free database implemented in Clojure and optimized for agile development.
+FleetDB is a schema-free database implemented in Clojure.
 
-Learn more at [FleetDB.org](http://fleetdb.org).
+Originally developed as part of the author's senior thesis work at
+Bowdoin college, FleetDB is no longer active.
+
